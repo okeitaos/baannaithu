@@ -289,14 +289,12 @@ async function exportExcel(){
       order_items!order_items_order_id_fkey (
         product_name,
         qty,
-        price,
-        options
+        price
       )
     `)
     .gte('created_at', start)
     .lte('created_at', end);
 
-  // 🔴 กัน error
   if(error){
     console.error(error);
     Swal.fire('Export ไม่สำเร็จ', error.message, 'error');
@@ -308,25 +306,22 @@ async function exportExcel(){
     return;
   }
 
-  // ✅ FIX schema ให้ตายตัว
+  // schema ตายตัว
   let rows = [
-    ['สินค้า', 'ตัวเลือก', 'จำนวน', 'รวม']
+    ['สินค้า', 'จำนวน', 'รวม']
   ];
 
   orders.forEach(o => {
-    if(!o.order_items) return;   // กัน null
-
+    if(!o.order_items) return;
     o.order_items.forEach(i => {
       rows.push([
         i.product_name,
-        i.options || '',
         i.qty,
         i.qty * i.price
       ]);
     });
   });
 
-  // ✅ FIX ภาษาไทย + คอลัมน์ไม่ล้น
   const csvContent =
     '\ufeff' +
     rows
