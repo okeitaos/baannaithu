@@ -5,8 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🍜 POS ร้านขนมจีน</title>
 
+<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
+
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body class="bg-slate-900 text-white p-3">
@@ -105,12 +111,23 @@
 /* ================= CONFIG ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
-const PROMPTPAY_ID = "0936494961";
+const PROMPTPAY_ID = "0812345678";
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* ================= SweetAlert SETUP ================= */
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 1600,
+  timerProgressBar: true,
+  background: '#1e293b',
+  color: '#fff'
+});
+
 /* ================= STATE ================= */
-let products = [];      // สินค้าที่ active = true ทั้งหมด
+let products = [];
 let cart = [];
 let currentProduct = null;
 
@@ -122,8 +139,7 @@ async function loadProducts() {
     .eq('active', true);
 
   if (error) {
-    alert('โหลดสินค้าไม่สำเร็จ');
-    console.error(error);
+    Toast.fire({ icon:'error', title:'โหลดสินค้าไม่สำเร็จ' });
     return;
   }
 
@@ -134,15 +150,13 @@ async function loadProducts() {
 /* ================= CATEGORY ================= */
 function loadCategory(cat) {
   menu.innerHTML = '';
-  products
-    .filter(p => p.category === cat)
-    .forEach(p => {
-      const btn = document.createElement('button');
-      btn.className = 'bg-slate-700 p-4 rounded';
-      btn.innerText = `${p.name}\n${p.price} บาท`;
-      btn.onclick = () => addItem(p);
-      menu.appendChild(btn);
-    });
+  products.filter(p => p.category === cat).forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'bg-slate-700 p-4 rounded';
+    btn.innerText = `${p.name}\n${p.price} บาท`;
+    btn.onclick = () => addItem(p);
+    menu.appendChild(btn);
+  });
 }
 
 /* ================= ADD ITEM ================= */
@@ -158,23 +172,19 @@ function addItem(p) {
 
   cart.push({ name: p.name, price: p.price });
   renderBill();
+  Toast.fire({ icon:'success', title:`เพิ่ม ${p.name}` });
 }
 
-/* ================= MIX OPTIONS (FROM DB) ================= */
+/* ================= MIX OPTIONS ================= */
 function buildMixOptions(mainName) {
   mixSelect.innerHTML = '<option value="">-- เลือกน้ำที่ผสม --</option>';
-
   products
-    .filter(p =>
-      p.category === 'ขนมจีน' &&   // ต้องเป็นน้ำขนมจีน
-      p.active === true &&          // ต้องเปิดขาย
-      p.name !== mainName           // ห้ามซ้ำกับน้ำหลัก
-    )
+    .filter(p => p.category === 'ขนมจีน' && p.name !== mainName)
     .forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.name;
-      opt.textContent = p.name;
-      mixSelect.appendChild(opt);
+      const o = document.createElement('option');
+      o.value = p.name;
+      o.textContent = p.name;
+      mixSelect.appendChild(o);
     });
 }
 
@@ -188,39 +198,33 @@ function confirmAddon() {
   let price = currentProduct.price;
   let detail = [];
 
-  if (addonSpecial.checked) {
-    price += 10;
-    detail.push('พิเศษ');
-  }
-
+  if (addonSpecial.checked) { price+=10; detail.push('พิเศษ'); }
   if (addonMix.checked) {
     if (!mixSelect.value) {
-      alert('กรุณาเลือกน้ำที่จะผสม');
+      Swal.fire({
+        icon:'info',
+        title:'ยังไม่ได้เลือกน้ำที่ผสม',
+        background:'#0f172a',
+        color:'#fff'
+      });
       return;
     }
-    price += 10;
-    detail.push(`ผสมน้ำ: ${mixSelect.value}`);
+    price+=10;
+    detail.push(`ผสมน้ำ:${mixSelect.value}`);
   }
+  if (addonEgg.checked) { price+=10; detail.push('ไข่ต้ม'); }
 
-  if (addonEgg.checked) {
-    price += 10;
-    detail.push('ไข่ต้ม');
-  }
-
-  if (detail.length) {
-    name += ` (${detail.join(', ')})`;
-  }
+  if (detail.length) name += ` (${detail.join(', ')})`;
 
   cart.push({ name, price });
   closeAddon();
   renderBill();
+  Toast.fire({ icon:'success', title:'เพิ่มขนมจีนแล้ว' });
 }
 
 function closeAddon() {
   addonModal.classList.add('hidden');
-  addonSpecial.checked = false;
-  addonMix.checked = false;
-  addonEgg.checked = false;
+  addonSpecial.checked = addonMix.checked = addonEgg.checked = false;
   mixSelect.classList.add('hidden');
   mixSelect.value = '';
 }
@@ -229,18 +233,19 @@ function closeAddon() {
 function renderBill() {
   bill.innerHTML = '';
   let sum = 0;
-
   cart.forEach(i => {
     bill.innerHTML += `<div>${i.name} = ${i.price}</div>`;
     sum += i.price;
   });
-
   total.innerText = sum;
 }
 
 /* ================= PAYMENT ================= */
 function checkout(type) {
-  if (!cart.length) return alert('ยังไม่มีรายการ');
+  if (!cart.length) {
+    Toast.fire({ icon:'info', title:'ยังไม่มีรายการ' });
+    return;
+  }
 
   const sum = cart.reduce((s,i)=>s+i.price,0);
   payModal.classList.remove('hidden');
@@ -270,35 +275,27 @@ async function confirmPay(type) {
   const sum = cart.reduce((s,i)=>s+i.price,0);
 
   if (type === 'cash' && Number(cashInput.value) < sum) {
-    alert('รับเงินไม่พอ');
-    return;
-  }
-
-  const { data: order, error } = await db
-    .from('orders')
-    .insert({ total: sum, payment: type })
-    .select()
-    .single();
-
-  if (error) {
-    alert('บันทึกออเดอร์ไม่สำเร็จ');
-    console.error(error);
-    return;
-  }
-
-  for (const i of cart) {
-    await db.from('order_items').insert({
-      order_id: order.id,
-      product_name: i.name,
-      qty: 1,
-      price: i.price
+    Swal.fire({
+      icon:'error',
+      title:'รับเงินไม่พอ',
+      background:'#0f172a',
+      color:'#fff'
     });
+    return;
   }
 
+  await db.from('orders').insert({ total: sum, payment: type });
   cart = [];
   renderBill();
   closePay();
-  alert('บันทึกเรียบร้อย');
+
+  Swal.fire({
+    icon:'success',
+    title:'บันทึกออเดอร์เรียบร้อย',
+    confirmButtonColor:'#16a34a',
+    background:'#0f172a',
+    color:'#fff'
+  });
 }
 
 function closePay() {
@@ -306,13 +303,26 @@ function closePay() {
 }
 
 /* ================= CANCEL ================= */
-function cancelOrder() {
+async function cancelOrder() {
   if (!cart.length) return;
-  if (!confirm('ต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?')) return;
+
+  const res = await Swal.fire({
+    title:'ยกเลิกออเดอร์?',
+    icon:'warning',
+    showCancelButton:true,
+    confirmButtonText:'ยกเลิก',
+    cancelButtonText:'ไม่ยกเลิก',
+    confirmButtonColor:'#dc2626',
+    background:'#0f172a',
+    color:'#fff'
+  });
+
+  if (!res.isConfirmed) return;
 
   cart = [];
   renderBill();
   closePay();
+  Toast.fire({ icon:'success', title:'ยกเลิกออเดอร์แล้ว' });
 }
 
 /* ================= START ================= */
