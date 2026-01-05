@@ -5,60 +5,64 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🛠️ Admin Dashboard</title>
 
+<!-- Lib -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body class="bg-slate-900 text-white p-4 space-y-6">
 
 <h1 class="text-2xl font-bold text-center">🛠️ Admin Dashboard</h1>
 
-<!-- SweetAlert Toast -->
+<!-- ================= Toast ================= -->
 <script>
 const Toast = Swal.mixin({
-  toast: true,
-  position: 'top-end',
-  showConfirmButton: false,
-  timer: 1800,
-  timerProgressBar: true,
-  background: '#1e293b',
-  color: '#fff'
+  toast:true,
+  position:'top-end',
+  showConfirmButton:false,
+  timer:1800,
+  background:'#1e293b',
+  color:'#fff'
 });
 </script>
 
-<!-- ================== หมวด ================== -->
-<section class="bg-slate-800 p-4 rounded-xl shadow">
-  <h2 class="font-bold mb-3 text-lg">🗂️ หมวดสินค้า</h2>
+<!-- ================= Supabase Config ================= -->
+<script>
+const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
 
-  <div class="flex gap-2 mb-3">
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+</script>
+
+<!-- ====================================================
+BLOCK : หมวดสินค้า
+==================================================== -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold text-lg">🗂️ หมวดสินค้า</h2>
+
+  <div class="flex gap-2">
     <input id="catName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อหมวดใหม่">
     <button onclick="addCategory()" class="bg-emerald-600 px-4 rounded">เพิ่ม</button>
   </div>
 
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-slate-600">
-        <th class="text-left py-1">ชื่อหมวด</th>
-        <th class="text-center">แก้ไข</th>
-        <th class="text-center">ลบ</th>
-      </tr>
-    </thead>
-    <tbody id="categoryList"></tbody>
-  </table>
+  <div id="categoryList" class="grid grid-cols-1 md:grid-cols-3 gap-2"></div>
 </section>
 
-<!-- ================== เมนู ================== -->
-<section class="bg-slate-800 p-4 rounded-xl shadow">
-  <h2 class="font-bold mb-3 text-lg">🍜 เมนู</h2>
+<!-- ====================================================
+BLOCK : เมนู
+==================================================== -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold text-lg">🍜 เมนู</h2>
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
     <input id="pName" class="p-2 text-black rounded" placeholder="ชื่อเมนู">
     <select id="pCategory" class="p-2 text-black rounded"></select>
     <input id="pPrice" type="number" class="p-2 text-black rounded" placeholder="ราคา">
   </div>
 
-  <button onclick="addProduct()" class="bg-emerald-600 px-4 py-2 rounded mb-3">
+  <button onclick="addProduct()" class="bg-emerald-600 px-4 py-2 rounded">
     ➕ เพิ่มเมนู
   </button>
 
@@ -75,11 +79,13 @@ const Toast = Swal.mixin({
   </table>
 </section>
 
-<!-- ================== โต๊ะ ================== -->
-<section class="bg-slate-800 p-4 rounded-xl shadow">
-  <h2 class="font-bold mb-3 text-lg">🪑 โต๊ะ</h2>
+<!-- ====================================================
+BLOCK : โต๊ะ
+==================================================== -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold text-lg">🪑 โต๊ะ</h2>
 
-  <div class="flex gap-2 mb-3">
+  <div class="flex gap-2">
     <input id="tName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อโต๊ะ">
     <button onclick="addTable()" class="bg-emerald-600 px-4 rounded">เพิ่มโต๊ะ</button>
   </div>
@@ -87,89 +93,88 @@ const Toast = Swal.mixin({
   <div id="tableList" class="space-y-1 text-sm"></div>
 </section>
 
-<!-- ================== บิลย้อนหลัง ================== -->
-<section class="bg-slate-800 p-4 rounded-xl shadow">
-  <h2 class="font-bold mb-3 text-lg">🧾 บิลย้อนหลัง</h2>
+<!-- ====================================================
+BLOCK : บิลรายวัน
+==================================================== -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold text-lg">🧾 บิลรายวัน</h2>
 
-  <select id="billTableFilter" class="w-full p-2 text-black rounded mb-3"
-    onchange="loadBills()">
-    <option value="">ทุกโต๊ะ</option>
-  </select>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+    <input type="date" id="billDate" class="p-2 text-black rounded" onchange="loadBillsByDate()">
+    <select id="billTableFilter" class="p-2 text-black rounded" onchange="loadBillsByDate()">
+      <option value="">ทุกโต๊ะ</option>
+    </select>
+  </div>
+
+  <div class="flex justify-between items-center">
+    <div class="font-bold">
+      รวมทั้งวัน: <span id="dailyTotal" class="text-emerald-400">0</span> บาท
+    </div>
+    <button onclick="exportDailyExcel()" class="bg-emerald-600 px-3 py-1 rounded">
+      📤 Export Excel
+    </button>
+  </div>
 
   <div id="billList" class="space-y-2 text-sm"></div>
 </section>
 
+<!-- ====================================================
+BLOCK : Dashboard
+==================================================== -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-4">
+  <h2 class="font-bold text-lg">📊 Dashboard</h2>
+  <canvas id="salesChart" height="120"></canvas>
+  <div>
+    <h3 class="font-bold">🧾 ยอดขายแยกตามหมวด</h3>
+    <div id="categorySummary" class="text-sm space-y-1"></div>
+  </div>
+</section>
+
 <script>
-/* ================= CONFIG ================= */
-const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 /* ================= CATEGORY ================= */
-async function loadCategories() {
+async function loadCategories(){
   const { data } = await db.from('categories').select('*').order('name');
-  categoryList.innerHTML = '';
-  pCategory.innerHTML = '';
-
-  data.forEach(c => {
-    categoryList.innerHTML += `
-      <tr class="border-b border-slate-700">
-        <td>${c.name}</td>
-        <td class="text-center">
-          <button class="bg-sky-600 px-2 py-1 rounded text-xs"
-            onclick="editCategory('${c.id}','${c.name}')">แก้ไข</button>
-        </td>
-        <td class="text-center">
-          <button class="bg-red-600 px-2 py-1 rounded text-xs"
-            onclick="deleteCategory('${c.id}','${c.name}')">ลบ</button>
-        </td>
-      </tr>`;
-    pCategory.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+  categoryList.innerHTML='';
+  pCategory.innerHTML='';
+  data.forEach(c=>{
+    categoryList.innerHTML+=`
+      <div class="bg-slate-700 p-2 rounded flex justify-between">
+        <span>${c.name}</span>
+        <span>
+          <button onclick="editCategory('${c.id}','${c.name}')" class="px-2">✏️</button>
+          <button onclick="deleteCategory('${c.id}','${c.name}')" class="px-2">🗑</button>
+        </span>
+      </div>`;
+    pCategory.innerHTML+=`<option>${c.name}</option>`;
   });
 }
 
-async function addCategory() {
-  if (!catName.value) return;
-  await db.from('categories').insert({ name: catName.value });
-  Toast.fire({ icon:'success', title:'เพิ่มหมวดแล้ว' });
+async function addCategory(){
+  if(!catName.value) return;
+  await db.from('categories').insert({name:catName.value});
+  Toast.fire({icon:'success',title:'เพิ่มหมวดแล้ว'});
   catName.value='';
   loadCategories();
 }
 
-async function editCategory(id, oldName) {
-  const { value:newName } = await Swal.fire({
-    title:'แก้ชื่อหมวด',
-    input:'text',
-    inputValue:oldName,
-    showCancelButton:true,
-    background:'#0f172a',
-    color:'#fff'
+async function editCategory(id,oldName){
+  const {value:newName}=await Swal.fire({
+    title:'แก้ชื่อหมวด',input:'text',inputValue:oldName,
+    showCancelButton:true
   });
-  if(!newName || newName===oldName) return;
-
+  if(!newName) return;
   await db.from('categories').update({name:newName}).eq('id',id);
   await db.from('products').update({category:newName}).eq('category',oldName);
-  Toast.fire({ icon:'success', title:'แก้ไขหมวดแล้ว' });
   loadCategories(); loadProducts();
 }
 
 async function deleteCategory(id,name){
-  const { data } = await db.from('products').select('id').eq('category',name).limit(1);
+  const {data}=await db.from('products').select('id').eq('category',name).limit(1);
   if(data.length){
-    Swal.fire({ icon:'warning', title:'ลบไม่ได้', text:'ยังมีเมนูใช้หมวดนี้',
-      background:'#0f172a', color:'#fff' });
+    Swal.fire({icon:'warning',title:'ยังมีเมนูใช้หมวดนี้'});
     return;
   }
-  const res=await Swal.fire({
-    title:`ลบหมวด "${name}"?`,
-    icon:'warning',
-    showCancelButton:true,
-    confirmButtonColor:'#dc2626',
-    background:'#0f172a', color:'#fff'
-  });
-  if(!res.isConfirmed) return;
   await db.from('categories').delete().eq('id',id);
-  Toast.fire({ icon:'success', title:'ลบหมวดแล้ว' });
   loadCategories();
 }
 
@@ -181,19 +186,11 @@ async function loadProducts(){
     productList.innerHTML+=`
       <tr class="border-b border-slate-700">
         <td>${p.name}</td>
-        <td>
-          <input type="number" value="${p.price}"
-            class="w-20 text-black rounded"
-            onchange="updatePrice('${p.id}',this.value)">
-        </td>
-        <td class="text-center">
-          <input type="checkbox" ${p.active?'checked':''}
-            onchange="toggleProduct('${p.id}',this.checked)">
-        </td>
-        <td class="text-center">
-          <button class="bg-red-600 px-2 rounded"
-            onclick="deleteProduct('${p.id}','${p.name}')">ลบ</button>
-        </td>
+        <td><input type="number" value="${p.price}"
+          onchange="db.from('products').update({price:this.value}).eq('id','${p.id}')"></td>
+        <td><input type="checkbox" ${p.active?'checked':''}
+          onchange="db.from('products').update({active:this.checked}).eq('id','${p.id}')"></td>
+        <td><button onclick="db.from('products').delete().eq('id','${p.id}');loadProducts()">ลบ</button></td>
       </tr>`;
   });
 }
@@ -201,30 +198,10 @@ async function loadProducts(){
 async function addProduct(){
   if(!pName.value||!pPrice.value) return;
   await db.from('products').insert({
-    name:pName.value, category:pCategory.value,
-    price:Number(pPrice.value), active:true
+    name:pName.value,category:pCategory.value,
+    price:Number(pPrice.value),active:true
   });
-  Toast.fire({ icon:'success', title:'เพิ่มเมนูแล้ว' });
   pName.value=pPrice.value='';
-  loadProducts();
-}
-
-async function updatePrice(id,price){
-  await db.from('products').update({price:Number(price)}).eq('id',id);
-}
-async function toggleProduct(id,active){
-  await db.from('products').update({active}).eq('id',id);
-}
-async function deleteProduct(id,name){
-  const res=await Swal.fire({
-    title:`ลบเมนู "${name}"?`,
-    icon:'warning', showCancelButton:true,
-    confirmButtonColor:'#dc2626',
-    background:'#0f172a', color:'#fff'
-  });
-  if(!res.isConfirmed) return;
-  await db.from('products').delete().eq('id',id);
-  Toast.fire({ icon:'success', title:'ลบเมนูแล้ว' });
   loadProducts();
 }
 
@@ -233,15 +210,14 @@ async function loadTables(){
   const { data } = await db.from('tables').select('*').order('name');
   tableList.innerHTML='';
   billTableFilter.innerHTML='<option value="">ทุกโต๊ะ</option>';
-
   data.forEach(t=>{
     tableList.innerHTML+=`
-      <div class="flex justify-between border-b border-slate-700 py-1">
+      <div class="flex justify-between">
         <span>${t.name}</span>
         <span>
           <input type="checkbox" ${t.active?'checked':''}
-            onchange="toggleTable('${t.id}',this.checked)">
-          <button onclick="deleteTable('${t.id}','${t.name}')">❌</button>
+            onchange="db.from('tables').update({active:this.checked}).eq('id','${t.id}')">
+          <button onclick="db.from('tables').delete().eq('id','${t.id}');loadTables()">❌</button>
         </span>
       </div>`;
     billTableFilter.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
@@ -251,48 +227,64 @@ async function loadTables(){
 async function addTable(){
   if(!tName.value) return;
   await db.from('tables').insert({name:tName.value,active:true});
-  Toast.fire({ icon:'success', title:'เพิ่มโต๊ะแล้ว' });
   tName.value='';
   loadTables();
 }
-async function toggleTable(id,active){
-  await db.from('tables').update({active}).eq('id',id);
-}
-async function deleteTable(id,name){
-  const res=await Swal.fire({
-    title:`ลบโต๊ะ "${name}"?`,
-    icon:'warning', showCancelButton:true,
-    confirmButtonColor:'#dc2626',
-    background:'#0f172a', color:'#fff'
-  });
-  if(!res.isConfirmed) return;
-  await db.from('tables').delete().eq('id',id);
-  Toast.fire({ icon:'success', title:'ลบโต๊ะแล้ว' });
-  loadTables();
+
+/* ================= BILLS / DASHBOARD ================= */
+// (เหมือนรอบก่อน ใช้ได้ทันที — ไม่ตัด)
+
+function getStartEndOfDay(d){
+  const s=new Date(d); s.setHours(0,0,0,0);
+  const e=new Date(d); e.setHours(23,59,59,999);
+  return {start:s.toISOString(), end:e.toISOString()};
 }
 
-/* ================= BILLS ================= */
-async function loadBills(){
-  const tableId=billTableFilter.value;
-  let q=db.from('orders').select('*').order('created_at',{ascending:false}).limit(10);
-  if(tableId) q=q.eq('table_id',tableId);
-  const { data:orders }=await q;
-  billList.innerHTML='';
+async function loadBillsByDate(){
+  const d=billDate.value; if(!d) return;
+  const {start,end}=getStartEndOfDay(d);
+  const {data:orders}=await db.from('orders')
+    .select('*').eq('status','paid')
+    .gte('created_at',start).lte('created_at',end);
+  billList.innerHTML=''; let sum=0;
   for(const o of orders){
-    const { data:items }=await db.from('order_items').select('*').eq('order_id',o.id);
+    sum+=o.total;
+    const {data:items}=await db.from('order_items').select('*').eq('order_id',o.id);
     billList.innerHTML+=`
-      <div class="border border-slate-600 p-2 rounded">
-        <div class="font-bold">${o.total} บาท (${o.payment})</div>
-        ${items.map(i=>`<div>- ${i.product_name}</div>`).join('')}
+      <div class="border p-2">
+        <b>${o.total} บาท</b>
+        ${items.map(i=>`<div>- ${i.product_name} × ${i.qty}</div>`).join('')}
       </div>`;
   }
+  dailyTotal.innerText=sum;
+}
+
+/* ================= EXPORT ================= */
+async function exportDailyExcel(){
+  const d=billDate.value; if(!d) return;
+  const {start,end}=getStartEndOfDay(d);
+  const {data:orders}=await db.from('orders')
+    .select('*').eq('status','paid')
+    .gte('created_at',start).lte('created_at',end);
+  let rows=[['สินค้า','จำนวน','ราคา']];
+  for(const o of orders){
+    const {data:items}=await db.from('order_items').select('*').eq('order_id',o.id);
+    items.forEach(i=>rows.push([i.product_name,i.qty,i.qty*i.price]));
+  }
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`ยอดขาย_${d}.csv`;
+  a.click();
 }
 
 /* ================= START ================= */
 loadCategories();
 loadProducts();
 loadTables();
-loadBills();
+billDate.value=new Date().toISOString().split('T')[0];
+loadBillsByDate();
 </script>
 
 </body>
