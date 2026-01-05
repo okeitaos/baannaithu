@@ -15,8 +15,7 @@
 <h1 class="text-xl font-bold text-center">🍜 POS ร้านขนมจีน</h1>
 
 <!-- เลือกโต๊ะ -->
-<select id="tableSelect"
-  class="w-full p-2 text-black rounded">
+<select id="tableSelect" class="w-full p-2 text-black rounded">
   <option value="">-- เลือกโต๊ะ --</option>
 </select>
 
@@ -49,14 +48,20 @@
   <div class="bg-slate-800 p-4 rounded w-80">
     <h2 id="addonTitle" class="font-bold mb-2 text-center"></h2>
 
-    <label><input type="checkbox" id="addonSpecial"> พิเศษ +10</label><br>
-    <label><input type="checkbox" id="addonMix" onchange="toggleMix()"> ผสมน้ำ +10</label>
+    <label class="block">
+      <input type="checkbox" id="addonSpecial"> พิเศษ +10
+    </label>
+
+    <label class="block mt-1">
+      <input type="checkbox" id="addonMix" onchange="toggleMix()"> ผสมน้ำ +10
+    </label>
+
     <select id="mixSelect" class="w-full text-black mt-1 hidden"></select>
-    <label><input type="checkbox" id="addonEgg"> ไข่ต้ม +10</label>
 
     <button onclick="confirmAddon()" class="mt-3 bg-emerald-600 w-full py-2 rounded">
       เพิ่มลงบิล
     </button>
+
     <button onclick="closeAddon()" class="mt-2 bg-slate-600 w-full py-1 rounded">
       ยกเลิก
     </button>
@@ -101,167 +106,267 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ================= SWEET ALERT ================= */
 const Toast = Swal.mixin({
-  toast:true, position:'top-end', showConfirmButton:false,
-  timer:1500, background:'#1e293b', color:'#fff'
+  toast:true,
+  position:'top-end',
+  showConfirmButton:false,
+  timer:1500,
+  background:'#1e293b',
+  color:'#fff'
 });
 
 /* ================= STATE ================= */
-let categories=[], products=[], tables=[];
-let cart=[], currentProduct=null;
+let categories = [];
+let products = [];
+let tables = [];
+let cart = [];
+let currentProduct = null;
 
-/* ================= LOAD DATA ================= */
+/* ================= INIT ================= */
 async function init(){
-  categories = (await db.from('categories').select('*')).data;
-  products   = (await db.from('products').select('*').eq('active',true)).data;
-  tables     = (await db.from('tables').select('*').eq('active',true)).data;
+  categories = (await db.from('categories').select('*')).data || [];
+  products   = (await db.from('products').select('*').eq('active',true)).data || [];
+  tables     = (await db.from('tables').select('*').eq('active',true)).data || [];
 
   renderCategories();
-  loadCategory(categories[0]?.name);
+  if(categories.length) loadCategory(categories[0].name);
   loadTables();
 }
 
+/* ================= TABLES ================= */
 function loadTables(){
-  tableSelect.innerHTML='<option value="">-- เลือกโต๊ะ --</option>';
+  tableSelect.innerHTML = '<option value="">-- เลือกโต๊ะ --</option>';
   tables.forEach(t=>{
-    tableSelect.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
+    tableSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
   });
 }
 
 /* ================= CATEGORY ================= */
 function renderCategories(){
-  categoryBar.innerHTML='';
+  categoryBar.innerHTML = '';
   categories.forEach(c=>{
-    const b=document.createElement('button');
-    b.className='bg-slate-700 px-4 py-2 rounded';
-    b.innerText=c.name;
-    b.onclick=()=>loadCategory(c.name);
-    categoryBar.appendChild(b);
+    const btn = document.createElement('button');
+    btn.className = 'bg-slate-700 px-4 py-2 rounded whitespace-nowrap';
+    btn.innerText = c.name;
+    btn.onclick = () => loadCategory(c.name);
+    categoryBar.appendChild(btn);
   });
 }
 
 function loadCategory(cat){
-  menu.innerHTML='';
+  menu.innerHTML = '';
   products.filter(p=>p.category===cat).forEach(p=>{
-    const b=document.createElement('button');
-    b.className='bg-slate-700 p-3 rounded';
-    b.innerText=`${p.name}\n${p.price} บาท`;
-    b.onclick=()=>addItem(p);
+    const b = document.createElement('button');
+    b.className = 'bg-slate-700 p-3 rounded';
+    b.innerText = `${p.name}\n${p.price} บาท`;
+    b.onclick = ()=>addItem(p);
     menu.appendChild(b);
   });
 }
 
 /* ================= ADD ITEM ================= */
 function addItem(p){
-  if(p.category==='ขนมจีน'){
-    currentProduct=p;
-    addonTitle.innerText=`${p.name} (${p.price})`;
+  if(p.category === 'ขนมจีน'){
+    currentProduct = p;
+    addonTitle.innerText = `${p.name} (${p.price})`;
     buildMixOptions(p.name);
     addonModal.classList.replace('hidden','flex');
     return;
   }
-  cart.push({name:p.name,price:p.price});
+
+  const found = cart.find(i=>i.name===p.name);
+  if(found){
+    found.qty++;
+  }else{
+    cart.push({ name:p.name, price:p.price, qty:1 });
+  }
   renderBill();
 }
 
 /* ================= MIX ================= */
 function buildMixOptions(main){
-  mixSelect.innerHTML='<option value="">-- เลือกน้ำที่ผสม --</option>';
-  products.filter(p=>p.category==='ขนมจีน'&&p.name!==main)
+  mixSelect.innerHTML = '<option value="">-- เลือกน้ำที่ผสม --</option>';
+  products
+    .filter(p=>p.category==='ขนมจีน' && p.name!==main)
     .forEach(p=>{
-      mixSelect.innerHTML+=`<option>${p.name}</option>`;
+      mixSelect.innerHTML += `<option>${p.name}</option>`;
     });
 }
 function toggleMix(){
-  mixSelect.classList.toggle('hidden',!addonMix.checked);
+  mixSelect.classList.toggle('hidden', !addonMix.checked);
 }
 
-/* ================= ADDON ================= */
+/* ================= CONFIRM ADDON ================= */
 function confirmAddon(){
-  let name=currentProduct.name;
-  let price=currentProduct.price;
-  let d=[];
-  if(addonSpecial.checked){price+=10;d.push('พิเศษ');}
+  let name = currentProduct.name;
+  let price = currentProduct.price;
+  let detail = [];
+
+  if(addonSpecial.checked){
+    price += 10;
+    detail.push('พิเศษ');
+  }
+
   if(addonMix.checked){
     if(!mixSelect.value){
-      Swal.fire({icon:'info',title:'เลือกน้ำที่ผสม'});
+      Swal.fire({ icon:'info', title:'กรุณาเลือกน้ำที่ผสม' });
       return;
     }
-    price+=10;d.push(`ผสม:${mixSelect.value}`);
+    price += 10;
+    detail.push(`ผสมน้ำ:${mixSelect.value}`);
   }
-  if(addonEgg.checked){price+=10;d.push('ไข่ต้ม');}
-  if(d.length) name+=` (${d.join(', ')})`;
-  cart.push({name,price});
-  closeAddon(); renderBill();
+
+  if(detail.length) name += ` (${detail.join(', ')})`;
+
+  const found = cart.find(i=>i.name===name);
+  if(found){
+    found.qty++;
+  }else{
+    cart.push({ name, price, qty:1 });
+  }
+
+  closeAddon();
+  renderBill();
 }
+
 function closeAddon(){
   addonModal.classList.replace('flex','hidden');
-  addonSpecial.checked=addonMix.checked=addonEgg.checked=false;
-  mixSelect.classList.add('hidden'); mixSelect.value='';
+  addonSpecial.checked = false;
+  addonMix.checked = false;
+  mixSelect.classList.add('hidden');
+  mixSelect.value = '';
 }
 
 /* ================= BILL ================= */
 function renderBill(){
-  bill.innerHTML='';
-  let sum=0;
-  cart.forEach(i=>{
-    bill.innerHTML+=`<div>${i.name} = ${i.price}</div>`;
-    sum+=i.price;
+  bill.innerHTML = '';
+  let sum = 0;
+
+  cart.forEach((i, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 border-b border-slate-700 py-1';
+
+    row.innerHTML = `
+      <div class="flex-1 text-sm">${i.name}</div>
+
+      <div class="flex items-center gap-1">
+        <button class="bg-slate-600 px-2 rounded"
+          onclick="changeQty(${idx}, -1)">−</button>
+        <span>${i.qty}</span>
+        <button class="bg-slate-600 px-2 rounded"
+          onclick="changeQty(${idx}, 1)">+</button>
+      </div>
+
+      <div class="w-16 text-right text-sm">
+        ${i.price * i.qty}
+      </div>
+
+      <button class="text-red-500 px-2"
+        onclick="removeItem(${idx})">✕</button>
+    `;
+
+    bill.appendChild(row);
+    sum += i.price * i.qty;
   });
-  total.innerText=sum;
+
+  total.innerText = sum;
+}
+
+function changeQty(index, diff){
+  cart[index].qty += diff;
+  if(cart[index].qty <= 0){
+    cart.splice(index, 1);
+  }
+  renderBill();
+}
+
+function removeItem(index){
+  cart.splice(index, 1);
+  renderBill();
 }
 
 /* ================= PAYMENT ================= */
 function checkout(type){
-  if(!cart.length) return Toast.fire({icon:'info',title:'ยังไม่มีรายการ'});
-  if(!tableSelect.value) return Swal.fire({icon:'warning',title:'กรุณาเลือกโต๊ะ'});
-  const sum=cart.reduce((s,i)=>s+i.price,0);
+  if(!cart.length){
+    Toast.fire({ icon:'info', title:'ยังไม่มีรายการ' });
+    return;
+  }
+  if(!tableSelect.value){
+    Swal.fire({ icon:'warning', title:'กรุณาเลือกโต๊ะ' });
+    return;
+  }
+
+  const sum = cart.reduce((s,i)=>s + i.price*i.qty, 0);
   payModal.classList.replace('hidden','flex');
-  cashBox.classList.add('hidden'); transferBox.classList.add('hidden');
+  cashBox.classList.add('hidden');
+  transferBox.classList.add('hidden');
+
   if(type==='transfer'){
-    payTitle.innerText=`โอน ${sum} บาท`;
+    payTitle.innerText = `โอน ${sum} บาท`;
     transferBox.classList.remove('hidden');
-    ppQR.src=`https://promptpay.io/${PROMPTPAY_ID}/${sum.toFixed(2)}.png`;
+    ppQR.src = `https://promptpay.io/${PROMPTPAY_ID}/${sum.toFixed(2)}.png`;
   }else{
-    payTitle.innerText=`เงินสด ${sum} บาท`;
+    payTitle.innerText = `เงินสด ${sum} บาท`;
     cashBox.classList.remove('hidden');
-    cashInput.value=''; changeText.innerText='0';
+    cashInput.value = '';
+    changeText.innerText = '0';
   }
 }
+
 function calcChange(){
-  const sum=cart.reduce((s,i)=>s+i.price,0);
-  changeText.innerText=cashInput.value-sum;
+  const sum = cart.reduce((s,i)=>s + i.price*i.qty, 0);
+  changeText.innerText = cashInput.value - sum;
 }
 
 async function confirmPay(type){
-  const sum=cart.reduce((s,i)=>s+i.price,0);
-  if(type==='cash' && cashInput.value<sum){
-    return Swal.fire({icon:'error',title:'รับเงินไม่พอ'});
+  const sum = cart.reduce((s,i)=>s + i.price*i.qty, 0);
+
+  if(type==='cash' && Number(cashInput.value) < sum){
+    Swal.fire({ icon:'error', title:'รับเงินไม่พอ' });
+    return;
   }
-  const { data:order } = await db.from('orders')
-    .insert({ total:sum, payment:type, table_id:tableSelect.value })
-    .select().single();
+
+  const { data: order } = await db.from('orders')
+    .insert({
+      total: sum,
+      payment: type,
+      table_id: tableSelect.value
+    })
+    .select()
+    .single();
 
   for(const i of cart){
     await db.from('order_items').insert({
-      order_id:order.id,
-      product_name:i.name,
-      price:i.price,
-      qty:1
+      order_id: order.id,
+      product_name: i.name,
+      price: i.price,
+      qty: i.qty
     });
   }
 
-  cart=[]; renderBill(); closePay();
-  Swal.fire({icon:'success',title:'บันทึกบิลแล้ว'});
+  cart = [];
+  renderBill();
+  closePay();
+  Swal.fire({ icon:'success', title:'บันทึกบิลเรียบร้อย' });
 }
+
 function closePay(){
   payModal.classList.replace('flex','hidden');
 }
+
 async function cancelOrder(){
   if(!cart.length) return;
-  const r=await Swal.fire({title:'ยกเลิกออเดอร์?',showCancelButton:true});
+  const r = await Swal.fire({
+    title:'ยกเลิกออเดอร์?',
+    showCancelButton:true,
+    confirmButtonText:'ยกเลิก',
+    cancelButtonText:'ไม่ยกเลิก'
+  });
   if(!r.isConfirmed) return;
-  cart=[]; renderBill(); closePay();
-  Toast.fire({icon:'success',title:'ยกเลิกแล้ว'});
+
+  cart = [];
+  renderBill();
+  closePay();
+  Toast.fire({ icon:'success', title:'ยกเลิกออเดอร์แล้ว' });
 }
 
 /* ================= START ================= */
