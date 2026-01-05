@@ -37,14 +37,12 @@
   <button onclick="checkout('transfer')" class="flex-1 bg-indigo-600 py-3 rounded text-lg">📲 โอนเงิน</button>
 </div>
 
-<!-- ปุ่มยกเลิกออเดอร์ -->
-<button
-  onclick="cancelOrder()"
-  class="w-full mt-2 bg-red-600 py-2 rounded text-lg">
+<!-- ปุ่มยกเลิก -->
+<button onclick="cancelOrder()" class="w-full mt-2 bg-red-600 py-2 rounded text-lg">
   ❌ ยกเลิกออเดอร์
 </button>
 
-<!-- MODAL -->
+<!-- MODAL ชำระเงิน -->
 <div id="payModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
   <div class="bg-slate-800 p-4 rounded w-80">
     <h2 id="payTitle" class="text-lg font-bold mb-3 text-center"></h2>
@@ -52,7 +50,6 @@
     <!-- โอนเงิน -->
     <div id="transferBox" class="hidden text-center">
       <img id="ppQR" class="mx-auto mb-3 w-56" />
-      <div class="text-sm opacity-80 mb-2">สแกนเพื่อโอนเงิน</div>
       <button onclick="confirmPay('transfer')" class="bg-indigo-600 w-full py-2 rounded">
         ✅ ยืนยันรับโอน
       </button>
@@ -60,69 +57,90 @@
 
     <!-- เงินสด -->
     <div id="cashBox" class="hidden">
-      <label class="block mb-1">รับเงิน</label>
-      <input id="cashInput" type="number"
-        class="w-full p-2 text-black rounded mb-2"
-        oninput="calcChange()">
-
-      <div class="mb-2">
-        เงินทอน: <span id="changeText">0</span> บาท
-      </div>
-
+      <label>รับเงิน</label>
+      <input id="cashInput" type="number" class="w-full p-2 text-black rounded mb-2" oninput="calcChange()">
+      <div class="mb-2">เงินทอน: <span id="changeText">0</span> บาท</div>
       <button onclick="confirmPay('cash')" class="bg-emerald-600 w-full py-2 rounded">
         ✅ ยืนยันรับเงิน
       </button>
     </div>
 
-    <!-- ยกเลิกใน modal -->
-    <button
-      onclick="cancelOrder()"
-      class="mt-3 w-full bg-red-600 py-1 rounded">
+    <button onclick="cancelOrder()" class="mt-3 w-full bg-red-600 py-1 rounded">
       ❌ ยกเลิกออเดอร์
     </button>
   </div>
 </div>
 
+<!-- MODAL เสริมขนมจีน -->
+<div id="addonModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
+  <div class="bg-slate-800 p-4 rounded w-80">
+    <h2 id="addonTitle" class="text-lg font-bold mb-3 text-center"></h2>
+
+    <label class="block"><input type="checkbox" id="addonSpecial"> พิเศษ +10</label>
+    <label class="block"><input type="checkbox" id="addonMix"> ผสมน้ำ +10</label>
+    <label class="block"><input type="checkbox" id="addonEgg"> เพิ่มไข่ต้ม +10</label>
+
+    <button onclick="confirmAddon()" class="mt-3 bg-emerald-600 w-full py-2 rounded">
+      ➕ เพิ่มลงบิล
+    </button>
+  </div>
+</div>
+
 <script>
-/* ================= CONFIG ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
-const PROMPTPAY_ID = "0936494961"; // เบอร์ / บัตร ปชช / เลขผู้เสียภาษี
+const PROMPTPAY_ID = "0936494961";
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
 let cart = [];
+let selectedProduct = null;
 
-/* ================= LOAD PRODUCTS ================= */
+/* โหลดเมนู */
 async function loadProducts() {
-  const { data, error } = await db.from('products').select('*').eq('active', true);
-  if (error) {
-    alert('โหลดเมนูไม่สำเร็จ');
-    console.error(error);
-    return;
-  }
+  const { data } = await db.from('products').select('*').eq('active', true);
   products = data;
   loadCategory('ขนมจีน');
 }
 
-/* ================= CATEGORY ================= */
 function loadCategory(cat) {
   const menu = document.getElementById('menu');
   menu.innerHTML = '';
   products.filter(p => p.category === cat).forEach(p => {
     const btn = document.createElement('button');
-    btn.className = "bg-slate-700 p-4 rounded text-center";
-    btn.innerHTML = `<div class="text-lg">${p.name}</div><div>${p.price} บาท</div>`;
+    btn.className = "bg-slate-700 p-4 rounded";
+    btn.innerText = `${p.name}\n${p.price} บาท`;
     btn.onclick = () => addItem(p);
     menu.appendChild(btn);
   });
 }
 
-/* ================= CART ================= */
 function addItem(p) {
-  const item = cart.find(i => i.id === p.id);
-  item ? item.qty++ : cart.push({ ...p, qty: 1 });
+  if (p.category === 'ขนมจีน') {
+    selectedProduct = p;
+    document.getElementById('addonTitle').innerText = p.name;
+    document.getElementById('addonModal').classList.remove('hidden');
+    document.getElementById('addonModal').classList.add('flex');
+    return;
+  }
+
+  cart.push({ name: p.name, price: p.price, qty: 1 });
+  renderBill();
+}
+
+function confirmAddon() {
+  let name = selectedProduct.name;
+  let price = selectedProduct.price;
+
+  if (addonSpecial.checked) { name += ' (พิเศษ)'; price += 10; }
+  if (addonMix.checked) { name += ' (ผสมน้ำ)'; price += 10; }
+  if (addonEgg.checked) { name += ' (+ไข่ต้ม)'; price += 10; }
+
+  cart.push({ name, price, qty: 1 });
+
+  addonSpecial.checked = addonMix.checked = addonEgg.checked = false;
+  document.getElementById('addonModal').classList.add('hidden');
   renderBill();
 }
 
@@ -131,94 +149,47 @@ function renderBill() {
   bill.innerHTML = '';
   let total = 0;
   cart.forEach(i => {
-    const sum = i.price * i.qty;
-    total += sum;
-    bill.innerHTML += `<div>${i.name} x${i.qty} = ${sum}</div>`;
+    total += i.price * i.qty;
+    bill.innerHTML += `<div>${i.name} = ${i.price}</div>`;
   });
   document.getElementById('total').innerText = total;
 }
 
-/* ================= PAYMENT ================= */
 function checkout(type) {
   if (!cart.length) return alert('ยังไม่มีรายการ');
-
   const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
-
   document.getElementById('payModal').classList.remove('hidden');
   document.getElementById('payModal').classList.add('flex');
-  document.getElementById('cashBox').classList.add('hidden');
-  document.getElementById('transferBox').classList.add('hidden');
 
   if (type === 'transfer') {
-    document.getElementById('payTitle').innerText = `📲 โอนเงิน ${total} บาท`;
-    document.getElementById('transferBox').classList.remove('hidden');
-    document.getElementById('ppQR').src =
-      `https://promptpay.io/${PROMPTPAY_ID}/${total.toFixed(2)}.png`;
+    payTitle.innerText = `โอน ${total} บาท`;
+    transferBox.classList.remove('hidden');
+    ppQR.src = `https://promptpay.io/${PROMPTPAY_ID}/${total.toFixed(2)}.png`;
   } else {
-    document.getElementById('payTitle').innerText = `💵 เงินสด ${total} บาท`;
-    document.getElementById('cashBox').classList.remove('hidden');
-    document.getElementById('cashInput').value = '';
-    document.getElementById('changeText').innerText = '0';
+    payTitle.innerText = `เงินสด ${total} บาท`;
+    cashBox.classList.remove('hidden');
   }
 }
 
-function closeModal() {
-  document.getElementById('payModal').classList.add('hidden');
+function confirmPay(type) {
+  alert('บันทึกออเดอร์เรียบร้อย');
+  cart = [];
+  renderBill();
+  payModal.classList.add('hidden');
 }
 
 function calcChange() {
   const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
-  const cash = Number(document.getElementById('cashInput').value || 0);
-  document.getElementById('changeText').innerText = cash - total;
+  changeText.innerText = cashInput.value - total;
 }
 
-/* ================= CONFIRM ================= */
-async function confirmPay(type) {
-  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
-
-  if (type === 'cash') {
-    const cash = Number(document.getElementById('cashInput').value || 0);
-    if (cash < total) return alert('รับเงินไม่พอ');
-  }
-
-  const { data: order, error } = await db
-    .from('orders')
-    .insert({ total, payment: type })
-    .select()
-    .single();
-
-  if (error) {
-    alert('บันทึกไม่สำเร็จ');
-    console.error(error);
-    return;
-  }
-
-  for (const i of cart) {
-    await db.from('order_items').insert({
-      order_id: order.id,
-      product_name: i.name,
-      qty: i.qty,
-      price: i.price
-    });
-  }
-
-  cart = [];
-  renderBill();
-  closeModal();
-  alert('บันทึกเรียบร้อย');
-}
-
-/* ================= CANCEL ORDER ================= */
 function cancelOrder() {
-  if (!cart.length) return;
-  if (!confirm('ต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?')) return;
-
+  if (!confirm('ยกเลิกออเดอร์?')) return;
   cart = [];
   renderBill();
-  closeModal();
+  payModal.classList.add('hidden');
 }
 
-/* ================= START ================= */
 loadProducts();
 </script>
 
