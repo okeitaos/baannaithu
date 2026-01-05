@@ -7,6 +7,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 </head>
 
 <body class="bg-slate-900 text-white p-3">
@@ -37,14 +38,15 @@
   <button onclick="checkout('transfer')" class="flex-1 bg-indigo-600 py-3 rounded text-lg">📲 โอนเงิน</button>
 </div>
 
-<!-- MODAL ชำระเงิน -->
+<!-- MODAL -->
 <div id="payModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
   <div class="bg-slate-800 p-4 rounded w-80">
     <h2 id="payTitle" class="text-lg font-bold mb-3 text-center"></h2>
 
     <!-- โอนเงิน -->
     <div id="transferBox" class="hidden text-center">
-      <img src="promptpay-qr.png" class="mx-auto mb-3 w-48">
+      <canvas id="qrCanvas" class="mx-auto mb-3"></canvas>
+      <div class="text-sm opacity-80 mb-2">สแกนเพื่อโอนเงิน</div>
       <button onclick="confirmPay('transfer')" class="bg-indigo-600 w-full py-2 rounded">
         ✅ ยืนยันรับโอน
       </button>
@@ -73,37 +75,28 @@
 </div>
 
 <script>
-/* 🔑 ตั้งค่า Supabase */
-const db = supabase.createClient(
-  "https://nvsptbbvxjulrpdebrhn.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
-);
+/* ================== CONFIG ================== */
+const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
+const PROMPTPAY_ID = "0936494961"; // 🔴 เปลี่ยนเป็น PromptPay ร้าน
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
 let cart = [];
 
-/* โหลดเมนู */
+/* ================== LOAD PRODUCTS ================== */
 async function loadProducts() {
-  const { data, error } = await db
-    .from('products')
-    .select('*')
-    .eq('active', true);
-
-  if (error) {
-    alert('โหลดเมนูไม่สำเร็จ');
-    console.error(error);
-    return;
-  }
-
+  const { data, error } = await db.from('products').select('*').eq('active', true);
+  if (error) return alert('โหลดเมนูไม่สำเร็จ');
   products = data;
   loadCategory('ขนมจีน');
 }
 
-/* เปลี่ยนหมวด */
+/* ================== CATEGORY ================== */
 function loadCategory(cat) {
   const menu = document.getElementById('menu');
   menu.innerHTML = '';
-
   products.filter(p => p.category === cat).forEach(p => {
     const btn = document.createElement('button');
     btn.className = "bg-slate-700 p-4 rounded text-center";
@@ -113,44 +106,39 @@ function loadCategory(cat) {
   });
 }
 
-/* เพิ่มสินค้า */
+/* ================== CART ================== */
 function addItem(p) {
   const item = cart.find(i => i.id === p.id);
-  if (item) item.qty++;
-  else cart.push({ ...p, qty: 1 });
+  item ? item.qty++ : cart.push({ ...p, qty: 1 });
   renderBill();
 }
 
-/* แสดงบิล */
 function renderBill() {
   const bill = document.getElementById('bill');
   bill.innerHTML = '';
   let total = 0;
-
   cart.forEach(i => {
     const sum = i.price * i.qty;
     total += sum;
     bill.innerHTML += `<div>${i.name} x${i.qty} = ${sum}</div>`;
   });
-
   document.getElementById('total').innerText = total;
 }
 
-/* เปิด modal */
+/* ================== PAYMENT ================== */
 function checkout(type) {
-  if (cart.length === 0) return alert('ยังไม่มีรายการ');
+  if (!cart.length) return alert('ยังไม่มีรายการ');
+  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
 
   document.getElementById('payModal').classList.remove('hidden');
   document.getElementById('payModal').classList.add('flex');
-
-  document.getElementById('transferBox').classList.add('hidden');
   document.getElementById('cashBox').classList.add('hidden');
-
-  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+  document.getElementById('transferBox').classList.add('hidden');
 
   if (type === 'transfer') {
     document.getElementById('payTitle').innerText = `📲 โอนเงิน ${total} บาท`;
     document.getElementById('transferBox').classList.remove('hidden');
+    genQR(total);
   } else {
     document.getElementById('payTitle').innerText = `💵 เงินสด ${total} บาท`;
     document.getElementById('cashBox').classList.remove('hidden');
@@ -159,22 +147,19 @@ function checkout(type) {
   }
 }
 
-/* ปิด modal */
 function closeModal() {
   document.getElementById('payModal').classList.add('hidden');
 }
 
-/* คำนวณเงินทอน */
 function calcChange() {
   const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
   const cash = Number(document.getElementById('cashInput').value || 0);
   document.getElementById('changeText').innerText = cash - total;
 }
 
-/* ยืนยันการจ่าย */
+/* ================== CONFIRM ================== */
 async function confirmPay(type) {
   const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
-
   if (type === 'cash') {
     const cash = Number(document.getElementById('cashInput').value || 0);
     if (cash < total) return alert('รับเงินไม่พอ');
@@ -186,11 +171,7 @@ async function confirmPay(type) {
     .select()
     .single();
 
-  if (error) {
-    alert('บันทึกไม่สำเร็จ');
-    console.error(error);
-    return;
-  }
+  if (error) return alert('บันทึกไม่สำเร็จ');
 
   for (const i of cart) {
     await db.from('order_items').insert({
@@ -205,6 +186,25 @@ async function confirmPay(type) {
   renderBill();
   closeModal();
   alert('บันทึกเรียบร้อย');
+}
+
+/* ================== PROMPTPAY QR ================== */
+function genQR(amount) {
+  const payload = genPromptPayPayload(PROMPTPAY_ID, amount);
+  QRCode.toCanvas(document.getElementById('qrCanvas'), payload, { width: 220 });
+}
+
+function genPromptPayPayload(id, amount) {
+  function f(id,v){return id+v.length.toString().padStart(2,'0')+v}
+  let p="000201"+f("01","12")+f("29",f("00","A000000677010111")+f("01",id))
+  +f("53","764")+f("54",amount.toFixed(2))+f("58","TH")+f("62",f("07","POS"))+"6304";
+  return p+crc16(p).toString(16).toUpperCase().padStart(4,'0');
+}
+
+function crc16(s){
+  let c=0xFFFF;
+  for(let ch of s){c^=ch.charCodeAt(0)<<8;for(let i=0;i<8;i++)c=c&0x8000?(c<<1)^0x1021:c<<1}
+  return c&0xFFFF;
 }
 
 loadProducts();
