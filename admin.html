@@ -110,6 +110,21 @@ const Toast = Swal.mixin({
   <h2 class="font-bold mb-2">📊 กราฟยอดขาย</h2>
   <canvas id="salesChart"></canvas>
 </section>
+<!-- ===== TOP PRODUCT FILTER ===== -->
+<div class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold">🏆 สินค้าขายดี</h2>
+
+  <div class="flex gap-2 items-center">
+    <label>หมวด:</label>
+    <select id="categoryFilter"
+      class="p-2 text-black rounded"
+      onchange="drawProductChart()">
+      <option value="">ทั้งหมด</option>
+    </select>
+  </div>
+
+  <canvas id="productChart" height="160"></canvas>
+</div>
 
 <!-- ================= LOGIC ================= -->
 <script>
@@ -133,6 +148,15 @@ async function loadCategories(){
       </div>`;
     pCategory.innerHTML+=`<option>${c.name}</option>`;
   });
+  // เติมหมวดให้กราฟขายดี
+const catSelect = document.getElementById('categoryFilter');
+if(catSelect){
+  catSelect.innerHTML = '<option value="">ทั้งหมด</option>';
+  data.forEach(c=>{
+    catSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+  });
+}
+
 }
 async function addCategory(){
   if(!catName.value) return;
@@ -345,20 +369,101 @@ async function exportExcel(){
 
 /* ---------- CHART ---------- */
 function drawChart(orders){
-  const h=[...Array(24).keys()];
-  const totals=h.map(x=>
-    orders.filter(o=>new Date(o.created_at).getHours()===x)
-          .reduce((s,o)=>s+o.total,0)
-  );
+  const hours = [...Array(24).keys()];
+  const totals = Array(24).fill(0);
+
+  orders.forEach(o=>{
+    const h = Number(
+      new Date(o.created_at)
+        .toLocaleString('th-TH',{
+          timeZone:'Asia/Bangkok',
+          hour:'2-digit',
+          hour12:false
+        })
+    );
+    totals[h] += o.total;
+  });
+
   if(window.salesChart && typeof window.salesChart.destroy==='function'){
     window.salesChart.destroy();
   }
-  window.salesChart=new Chart(
+
+  window.salesChart = new Chart(
     document.getElementById('salesChart'),
     {
       type:'bar',
-      data:{ labels:h.map(x=>`${x}:00`),
-        datasets:[{ label:'ยอดขาย', data:totals }] }
+      data:{
+        labels: hours.map(h=>`${h}:00`),
+        datasets:[{
+          label:'ยอดขาย (บาท)',
+          data: totals,
+          backgroundColor:'#22c55e'
+        }]
+      },
+      options:{
+        plugins:{ legend:{ display:false } }
+      }
+    }
+  );
+}
+  async function drawProductChart(){
+  const d = billDate.value;
+  if(!d) return;
+
+  const { start, end } = thaiRange(d);
+  const category = document.getElementById('categoryFilter')?.value || '';
+
+  const { data: orders, error } = await db
+    .from('orders')
+    .select(`
+      order_items!order_items_order_id_fkey(
+        product_name,
+        qty
+      )
+    `)
+    .gte('created_at', start)
+    .lte('created_at', end);
+
+  if(error){
+    console.error(error);
+    return;
+  }
+
+  const map = {};
+
+  orders.forEach(o=>{
+    o.order_items?.forEach(i=>{
+      // กรองหมวด (ถ้าเลือก)
+      if(category && !i.product_name.includes(category)) return;
+
+      map[i.product_name] =
+        (map[i.product_name] || 0) + i.qty;
+    });
+  });
+
+  const labels = Object.keys(map);
+  const values = Object.values(map);
+
+  if(window.productChart && typeof window.productChart.destroy==='function'){
+    window.productChart.destroy();
+  }
+
+  window.productChart = new Chart(
+    document.getElementById('productChart'),
+    {
+      type:'bar',
+      data:{
+        labels,
+        datasets:[{
+          label:'จำนวนที่ขายได้',
+          data: values,
+          backgroundColor:'#38bdf8'
+        }]
+      },
+      options:{
+        indexAxis:'y',
+        plugins:{ legend:{ display:false } }
+      }
     }
   );
 }
