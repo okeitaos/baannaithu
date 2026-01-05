@@ -109,14 +109,24 @@ const PROMPTPAY_ID = "0936494961";
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ================= DATA ================= */
-let products = [];
+/* ================= STATE ================= */
+let products = [];      // สินค้าที่ active = true ทั้งหมด
 let cart = [];
 let currentProduct = null;
 
 /* ================= LOAD PRODUCTS ================= */
 async function loadProducts() {
-  const { data } = await db.from('products').select('*').eq('active', true);
+  const { data, error } = await db
+    .from('products')
+    .select('*')
+    .eq('active', true);
+
+  if (error) {
+    alert('โหลดสินค้าไม่สำเร็จ');
+    console.error(error);
+    return;
+  }
+
   products = data;
   loadCategory('ขนมจีน');
 }
@@ -124,13 +134,15 @@ async function loadProducts() {
 /* ================= CATEGORY ================= */
 function loadCategory(cat) {
   menu.innerHTML = '';
-  products.filter(p => p.category === cat).forEach(p => {
-    const b = document.createElement('button');
-    b.className = 'bg-slate-700 p-4 rounded';
-    b.innerText = `${p.name}\n${p.price} บาท`;
-    b.onclick = () => addItem(p);
-    menu.appendChild(b);
-  });
+  products
+    .filter(p => p.category === cat)
+    .forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'bg-slate-700 p-4 rounded';
+      btn.innerText = `${p.name}\n${p.price} บาท`;
+      btn.onclick = () => addItem(p);
+      menu.appendChild(btn);
+    });
 }
 
 /* ================= ADD ITEM ================= */
@@ -141,22 +153,28 @@ function addItem(p) {
     buildMixOptions(p.name);
     addonModal.classList.remove('hidden');
     addonModal.classList.add('flex');
-  } else {
-    cart.push({ name: p.name, price: p.price });
-    renderBill();
+    return;
   }
+
+  cart.push({ name: p.name, price: p.price });
+  renderBill();
 }
 
-/* ================= MIX LOGIC ================= */
+/* ================= MIX OPTIONS (FROM DB) ================= */
 function buildMixOptions(mainName) {
   mixSelect.innerHTML = '<option value="">-- เลือกน้ำที่ผสม --</option>';
+
   products
-    .filter(p => p.category === 'ขนมจีน' && p.name !== mainName)
+    .filter(p =>
+      p.category === 'ขนมจีน' &&   // ต้องเป็นน้ำขนมจีน
+      p.active === true &&          // ต้องเปิดขาย
+      p.name !== mainName           // ห้ามซ้ำกับน้ำหลัก
+    )
     .forEach(p => {
-      const o = document.createElement('option');
-      o.value = p.name;
-      o.text = p.name;
-      mixSelect.appendChild(o);
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = p.name;
+      mixSelect.appendChild(opt);
     });
 }
 
@@ -189,7 +207,9 @@ function confirmAddon() {
     detail.push('ไข่ต้ม');
   }
 
-  if (detail.length) name += ` (${detail.join(', ')})`;
+  if (detail.length) {
+    name += ` (${detail.join(', ')})`;
+  }
 
   cart.push({ name, price });
   closeAddon();
@@ -198,7 +218,9 @@ function confirmAddon() {
 
 function closeAddon() {
   addonModal.classList.add('hidden');
-  addonSpecial.checked = addonMix.checked = addonEgg.checked = false;
+  addonSpecial.checked = false;
+  addonMix.checked = false;
+  addonEgg.checked = false;
   mixSelect.classList.add('hidden');
   mixSelect.value = '';
 }
@@ -206,21 +228,24 @@ function closeAddon() {
 /* ================= BILL ================= */
 function renderBill() {
   bill.innerHTML = '';
-  let total = 0;
+  let sum = 0;
+
   cart.forEach(i => {
     bill.innerHTML += `<div>${i.name} = ${i.price}</div>`;
-    total += i.price;
+    sum += i.price;
   });
-  total.innerText = total;
+
+  total.innerText = sum;
 }
 
 /* ================= PAYMENT ================= */
 function checkout(type) {
   if (!cart.length) return alert('ยังไม่มีรายการ');
-  const sum = cart.reduce((s,i)=>s+i.price,0);
 
+  const sum = cart.reduce((s,i)=>s+i.price,0);
   payModal.classList.remove('hidden');
   payModal.classList.add('flex');
+
   cashBox.classList.add('hidden');
   transferBox.classList.add('hidden');
 
@@ -249,11 +274,17 @@ async function confirmPay(type) {
     return;
   }
 
-  const { data: order } = await db
+  const { data: order, error } = await db
     .from('orders')
     .insert({ total: sum, payment: type })
     .select()
     .single();
+
+  if (error) {
+    alert('บันทึกออเดอร์ไม่สำเร็จ');
+    console.error(error);
+    return;
+  }
 
   for (const i of cart) {
     await db.from('order_items').insert({
@@ -277,7 +308,8 @@ function closePay() {
 /* ================= CANCEL ================= */
 function cancelOrder() {
   if (!cart.length) return;
-  if (!confirm('ยกเลิกออเดอร์นี้?')) return;
+  if (!confirm('ต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?')) return;
+
   cart = [];
   renderBill();
   closePay();
