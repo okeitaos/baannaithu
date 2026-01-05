@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>POS ร้านขนมจีน</title>
+<title>🍜 POS ร้านขนมจีน</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -15,9 +15,9 @@
 
 <!-- หมวด -->
 <div class="flex gap-2 mb-3">
-  <button onclick="loadCategory('ขนมจีน')" class="flex-1 bg-orange-600 py-2 rounded">ขนมจีน</button>
-  <button onclick="loadCategory('น้ำ')" class="flex-1 bg-sky-600 py-2 rounded">น้ำ</button>
-  <button onclick="loadCategory('ทานเล่น')" class="flex-1 bg-green-600 py-2 rounded">ทานเล่น</button>
+  <button onclick="loadCategory('ขนมจีน')" class="flex-1 bg-orange-600 py-2 rounded">🍜 ขนมจีน</button>
+  <button onclick="loadCategory('น้ำ')" class="flex-1 bg-sky-600 py-2 rounded">🧊 น้ำ</button>
+  <button onclick="loadCategory('ทานเล่น')" class="flex-1 bg-green-600 py-2 rounded">🍗 ทานเล่น</button>
 </div>
 
 <!-- เมนู -->
@@ -27,18 +27,53 @@
 <div class="bg-slate-800 p-3 rounded mb-3">
   <div id="bill"></div>
   <div class="border-t border-slate-600 mt-2 pt-2 text-lg font-bold">
-    รวม: <span id="total">0</span> บาท
+    รวมทั้งหมด: <span id="total">0</span> บาท
   </div>
 </div>
 
-<!-- ชำระเงิน -->
+<!-- ปุ่มชำระเงิน -->
 <div class="flex gap-2">
   <button onclick="checkout('cash')" class="flex-1 bg-emerald-600 py-3 rounded text-lg">💵 เงินสด</button>
   <button onclick="checkout('transfer')" class="flex-1 bg-indigo-600 py-3 rounded text-lg">📲 โอนเงิน</button>
 </div>
 
+<!-- MODAL ชำระเงิน -->
+<div id="payModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
+  <div class="bg-slate-800 p-4 rounded w-80">
+    <h2 id="payTitle" class="text-lg font-bold mb-3 text-center"></h2>
+
+    <!-- โอนเงิน -->
+    <div id="transferBox" class="hidden text-center">
+      <img src="promptpay-qr.png" class="mx-auto mb-3 w-48">
+      <button onclick="confirmPay('transfer')" class="bg-indigo-600 w-full py-2 rounded">
+        ✅ ยืนยันรับโอน
+      </button>
+    </div>
+
+    <!-- เงินสด -->
+    <div id="cashBox" class="hidden">
+      <label class="block mb-1">รับเงิน</label>
+      <input id="cashInput" type="number"
+        class="w-full p-2 text-black rounded mb-2"
+        oninput="calcChange()">
+
+      <div class="mb-2">
+        เงินทอน: <span id="changeText">0</span> บาท
+      </div>
+
+      <button onclick="confirmPay('cash')" class="bg-emerald-600 w-full py-2 rounded">
+        ✅ ยืนยันรับเงิน
+      </button>
+    </div>
+
+    <button onclick="closeModal()" class="mt-3 w-full bg-slate-600 py-1 rounded">
+      ยกเลิก
+    </button>
+  </div>
+</div>
+
 <script>
-/* 🔑 1. สร้าง client (ใช้ชื่อ db แทน supabase) */
+/* 🔑 ตั้งค่า Supabase */
 const db = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
@@ -47,7 +82,7 @@ const db = supabase.createClient(
 let products = [];
 let cart = [];
 
-/* 🔑 2. โหลดเมนู */
+/* โหลดเมนู */
 async function loadProducts() {
   const { data, error } = await db
     .from('products')
@@ -64,26 +99,21 @@ async function loadProducts() {
   loadCategory('ขนมจีน');
 }
 
-/* 🔑 3. เปลี่ยนหมวด */
+/* เปลี่ยนหมวด */
 function loadCategory(cat) {
   const menu = document.getElementById('menu');
   menu.innerHTML = '';
 
-  products
-    .filter(p => p.category === cat)
-    .forEach(p => {
-      const btn = document.createElement('button');
-      btn.className = "bg-slate-700 p-4 rounded text-center";
-      btn.innerHTML = `
-        <div class="text-lg">${p.name}</div>
-        <div>${p.price} บาท</div>
-      `;
-      btn.onclick = () => addItem(p);
-      menu.appendChild(btn);
-    });
+  products.filter(p => p.category === cat).forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = "bg-slate-700 p-4 rounded text-center";
+    btn.innerHTML = `<div class="text-lg">${p.name}</div><div>${p.price} บาท</div>`;
+    btn.onclick = () => addItem(p);
+    menu.appendChild(btn);
+  });
 }
 
-/* 🔑 4. เพิ่มรายการ */
+/* เพิ่มสินค้า */
 function addItem(p) {
   const item = cart.find(i => i.id === p.id);
   if (item) item.qty++;
@@ -91,7 +121,7 @@ function addItem(p) {
   renderBill();
 }
 
-/* 🔑 5. แสดงบิล */
+/* แสดงบิล */
 function renderBill() {
   const bill = document.getElementById('bill');
   bill.innerHTML = '';
@@ -106,23 +136,58 @@ function renderBill() {
   document.getElementById('total').innerText = total;
 }
 
-/* 🔑 6. ชำระเงิน */
-async function checkout(payment) {
-  if (cart.length === 0) {
-    alert('ยังไม่มีรายการ');
-    return;
-  }
+/* เปิด modal */
+function checkout(type) {
+  if (cart.length === 0) return alert('ยังไม่มีรายการ');
 
-  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  document.getElementById('payModal').classList.remove('hidden');
+  document.getElementById('payModal').classList.add('flex');
+
+  document.getElementById('transferBox').classList.add('hidden');
+  document.getElementById('cashBox').classList.add('hidden');
+
+  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+
+  if (type === 'transfer') {
+    document.getElementById('payTitle').innerText = `📲 โอนเงิน ${total} บาท`;
+    document.getElementById('transferBox').classList.remove('hidden');
+  } else {
+    document.getElementById('payTitle').innerText = `💵 เงินสด ${total} บาท`;
+    document.getElementById('cashBox').classList.remove('hidden');
+    document.getElementById('cashInput').value = '';
+    document.getElementById('changeText').innerText = '0';
+  }
+}
+
+/* ปิด modal */
+function closeModal() {
+  document.getElementById('payModal').classList.add('hidden');
+}
+
+/* คำนวณเงินทอน */
+function calcChange() {
+  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+  const cash = Number(document.getElementById('cashInput').value || 0);
+  document.getElementById('changeText').innerText = cash - total;
+}
+
+/* ยืนยันการจ่าย */
+async function confirmPay(type) {
+  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+
+  if (type === 'cash') {
+    const cash = Number(document.getElementById('cashInput').value || 0);
+    if (cash < total) return alert('รับเงินไม่พอ');
+  }
 
   const { data: order, error } = await db
     .from('orders')
-    .insert({ total, payment })
+    .insert({ total, payment: type })
     .select()
     .single();
 
   if (error) {
-    alert('บันทึกออเดอร์ไม่สำเร็จ');
+    alert('บันทึกไม่สำเร็จ');
     console.error(error);
     return;
   }
@@ -138,10 +203,10 @@ async function checkout(payment) {
 
   cart = [];
   renderBill();
-  alert('บันทึกออเดอร์เรียบร้อย');
+  closeModal();
+  alert('บันทึกเรียบร้อย');
 }
 
-/* 🔑 เริ่มทำงาน */
 loadProducts();
 </script>
 
