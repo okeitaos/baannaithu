@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🛠️ Admin Dashboard</title>
 
-<!-- ===== 1) SUPABASE SDK (ห้ามลบ) ===== -->
+<!-- SUPABASE SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- ===== 2) UI LIB ===== -->
+<!-- UI -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -19,20 +19,17 @@
 <h1 class="text-2xl font-bold text-center">🛠️ Admin Dashboard</h1>
 
 <!-- =================================================
-🔥🔥🔥 CONNECT SUPABASE (ตรงนี้แหละ ตัวเชื่อม)
+🔥 CONNECT SUPABASE (หัวใจ)
 ================================================= -->
 <script>
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
 
-/* 🔥 ตัวเชื่อมจริง ๆ อยู่บรรทัดนี้ */
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-/* เช็กให้หายหงุดหงิด */
-console.log("SUPABASE CONNECTED =", db);
+console.log('SUPABASE CONNECTED', db);
 </script>
 
-<!-- ================= TOAST ================= -->
+<!-- Toast -->
 <script>
 const Toast = Swal.mixin({
   toast:true,
@@ -71,7 +68,10 @@ const Toast = Swal.mixin({
   <table class="w-full text-sm">
     <thead>
       <tr class="border-b border-slate-600">
-        <th>ชื่อ</th><th>ราคา</th><th>ขาย</th><th>ลบ</th>
+        <th>ชื่อ</th>
+        <th>ราคา</th>
+        <th>ขาย</th>
+        <th>ลบ</th>
       </tr>
     </thead>
     <tbody id="productList"></tbody>
@@ -88,7 +88,7 @@ const Toast = Swal.mixin({
   <div id="tableList" class="space-y-1"></div>
 </section>
 
-<!-- ================= BILL ================= -->
+<!-- ================= BILLS ================= -->
 <section class="bg-slate-800 p-4 rounded-xl space-y-3">
   <h2 class="font-bold">🧾 บิลรายวัน</h2>
 
@@ -115,15 +115,18 @@ const Toast = Swal.mixin({
 
 <!-- ================= LOGIC ================= -->
 <script>
+/* ---------- UTIL ---------- */
 function thaiRange(d){
   const s=new Date(d+'T00:00:00+07:00');
   const e=new Date(d+'T23:59:59+07:00');
   return {start:s.toISOString(),end:e.toISOString()};
 }
 
-/* CATEGORY */
+/* ---------- CATEGORY ---------- */
 async function loadCategories(){
-  const {data}=await db.from('categories').select('*').order('name');
+  const {data,error}=await db.from('categories').select('*').order('name');
+  if(error) return console.error(error);
+
   categoryList.innerHTML='';
   pCategory.innerHTML='';
   data.forEach(c=>{
@@ -136,44 +139,97 @@ async function loadCategories(){
   });
 }
 async function addCategory(){
-  if(!catName.value)return;
+  if(!catName.value) return;
   await db.from('categories').insert({name:catName.value});
-  catName.value=''; loadCategories();
+  catName.value='';
+  Toast.fire({icon:'success',title:'เพิ่มหมวดแล้ว'});
+  loadCategories();
 }
 async function deleteCategory(id,name){
   const {data}=await db.from('products').select('id').eq('category',name).limit(1);
-  if(data.length){ alert('ยังมีสินค้าใช้หมวดนี้'); return; }
+  if(data.length){
+    Swal.fire('ลบไม่ได้','ยังมีสินค้าใช้หมวดนี้','warning');
+    return;
+  }
   await db.from('categories').delete().eq('id',id);
   loadCategories();
 }
 
-/* PRODUCT */
+/* ---------- PRODUCT ---------- */
 async function loadProducts(){
-  const {data}=await db.from('products').select('*').order('category');
+  const {data,error}=await db.from('products').select('*').order('category');
+  if(error) return console.error(error);
+
   productList.innerHTML='';
   data.forEach(p=>{
     productList.innerHTML+=`
-      <tr>
+      <tr class="border-b border-slate-700">
         <td>${p.name}</td>
-        <td><input type="number" value="${p.price}"
-          onchange="db.from('products').update({price:this.value}).eq('id','${p.id}')"></td>
-        <td><input type="checkbox" ${p.active?'checked':''}
-          onchange="db.from('products').update({active:this.checked}).eq('id','${p.id}')"></td>
-        <td><button onclick="db.from('products').delete().eq('id','${p.id}');loadProducts()">ลบ</button></td>
+        <td>
+          <input type="number" value="${p.price}"
+            class="w-20 text-black px-1"
+            onchange="updateProductPrice('${p.id}',this.value)">
+        </td>
+        <td class="text-center">
+          <input type="checkbox" ${p.active?'checked':''}
+            onchange="toggleProductActive('${p.id}',this.checked)">
+        </td>
+        <td class="text-center">
+          <button onclick="deleteProduct('${p.id}','${p.name}')">ลบ</button>
+        </td>
       </tr>`;
   });
 }
 async function addProduct(){
-  if(!pName.value||!pPrice.value)return;
+  if(!pName.value||!pPrice.value) return;
   await db.from('products').insert({
-    name:pName.value,category:pCategory.value,price:+pPrice.value,active:true
+    name:pName.value,
+    category:pCategory.value,
+    price:Number(pPrice.value),
+    active:true
   });
-  pName.value=pPrice.value=''; loadProducts();
+  pName.value=pPrice.value='';
+  loadProducts();
+}
+async function updateProductPrice(id,price){
+  const {error}=await db.from('products')
+    .update({price:Number(price)})
+    .eq('id',id);
+  if(error){
+    Swal.fire('แก้ราคาไม่สำเร็จ',error.message,'error');
+  }
+}
+async function toggleProductActive(id,active){
+  const {error}=await db.from('products')
+    .update({active})
+    .eq('id',id);
+  if(error){
+    Swal.fire('เปลี่ยนสถานะไม่สำเร็จ',error.message,'error');
+  }
+}
+async function deleteProduct(id,name){
+  const res=await Swal.fire({
+    title:`ลบ "${name}" ?`,
+    icon:'warning',
+    showCancelButton:true,
+    confirmButtonColor:'#dc2626'
+  });
+  if(!res.isConfirmed) return;
+
+  const {error}=await db.from('products').delete().eq('id',id);
+  if(error){
+    Swal.fire('ลบไม่สำเร็จ',error.message,'error');
+  }else{
+    Toast.fire({icon:'success',title:'ลบสินค้าแล้ว'});
+    loadProducts();
+  }
 }
 
-/* TABLE */
+/* ---------- TABLE ---------- */
 async function loadTables(){
-  const {data}=await db.from('tables').select('*').order('name');
+  const {data,error}=await db.from('tables').select('*').order('name');
+  if(error) return console.error(error);
+
   tableList.innerHTML='';
   data.forEach(t=>{
     tableList.innerHTML+=`
@@ -185,17 +241,18 @@ async function loadTables(){
   });
 }
 async function addTable(){
-  if(!tName.value)return;
+  if(!tName.value) return;
   await db.from('tables').insert({name:tName.value,active:true});
-  tName.value=''; loadTables();
+  tName.value='';
+  loadTables();
 }
 
-/* BILL */
+/* ---------- BILLS ---------- */
 async function loadBills(){
-  const d=billDate.value; if(!d)return;
+  const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
 
-  const {data:orders}=await db
+  const {data:orders,error}=await db
     .from('orders')
     .select(`
       id,total,created_at,
@@ -205,7 +262,13 @@ async function loadBills(){
     .lte('created_at',end)
     .order('created_at',{ascending:false});
 
-  billList.innerHTML=''; let sum=0;
+  if(error){
+    Swal.fire('โหลดบิลไม่ได้',error.message,'error');
+    return;
+  }
+
+  billList.innerHTML='';
+  let sum=0;
   orders.forEach(o=>{
     sum+=o.total;
     billList.innerHTML+=`
@@ -218,7 +281,7 @@ async function loadBills(){
   drawChart(orders);
 }
 
-/* EXPORT */
+/* ---------- EXPORT ---------- */
 async function exportExcel(){
   const d=billDate.value;if(!d)return;
   const {start,end}=thaiRange(d);
@@ -237,6 +300,7 @@ async function exportExcel(){
       rows.push([i.product_name,i.qty,i.qty*i.price]);
     });
   });
+
   const csv=rows.map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
@@ -244,25 +308,31 @@ async function exportExcel(){
   a.click();
 }
 
-/* CHART (FIX BUG) */
+/* ---------- CHART ---------- */
 function drawChart(orders){
   const h=[...Array(24).keys()];
-  const totals=h.map(x=>orders.filter(o=>new Date(o.created_at).getHours()===x)
-    .reduce((s,o)=>s+o.total,0));
+  const totals=h.map(x=>
+    orders.filter(o=>new Date(o.created_at).getHours()===x)
+          .reduce((s,o)=>s+o.total,0)
+  );
 
   if(window.salesChart && typeof window.salesChart.destroy==='function'){
     window.salesChart.destroy();
   }
 
   window.salesChart=new Chart(
-    document.getElementById('salesChart'),{
+    document.getElementById('salesChart'),
+    {
       type:'bar',
-      data:{labels:h.map(x=>`${x}:00`),
-      datasets:[{data:totals,label:'ยอดขาย'}]}
-    });
+      data:{
+        labels:h.map(x=>`${x}:00`),
+        datasets:[{label:'ยอดขาย',data:totals}]
+      }
+    }
+  );
 }
 
-/* INIT */
+/* ---------- INIT ---------- */
 loadCategories();
 loadProducts();
 loadTables();
