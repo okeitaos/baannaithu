@@ -5,9 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🍜 POS ร้านขนมจีน</title>
 
+<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Tailwind -->
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+
+<!-- QRCode Generator (ตัวนี้ชัวร์) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 </head>
 
 <body class="bg-slate-900 text-white p-3">
@@ -45,7 +50,7 @@
 
     <!-- โอนเงิน -->
     <div id="transferBox" class="hidden text-center">
-      <canvas id="qrCanvas" class="mx-auto mb-3"></canvas>
+      <div id="qrBox" class="flex justify-center mb-3"></div>
       <div class="text-sm opacity-80 mb-2">สแกนเพื่อโอนเงิน</div>
       <button onclick="confirmPay('transfer')" class="bg-indigo-600 w-full py-2 rounded">
         ✅ ยืนยันรับโอน
@@ -75,25 +80,29 @@
 </div>
 
 <script>
-/* ================== CONFIG ================== */
+/* ================= CONFIG ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
-const PROMPTPAY_ID = "0936494961"; // 🔴 เปลี่ยนเป็น PromptPay ร้าน
+const PROMPTPAY_ID = "0936494961"; // 🔴 ใส่ PromptPay ร้านคุณ
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
 let cart = [];
 
-/* ================== LOAD PRODUCTS ================== */
+/* ================= LOAD PRODUCTS ================= */
 async function loadProducts() {
   const { data, error } = await db.from('products').select('*').eq('active', true);
-  if (error) return alert('โหลดเมนูไม่สำเร็จ');
+  if (error) {
+    alert('โหลดเมนูไม่สำเร็จ');
+    console.error(error);
+    return;
+  }
   products = data;
   loadCategory('ขนมจีน');
 }
 
-/* ================== CATEGORY ================== */
+/* ================= CATEGORY ================= */
 function loadCategory(cat) {
   const menu = document.getElementById('menu');
   menu.innerHTML = '';
@@ -106,7 +115,7 @@ function loadCategory(cat) {
   });
 }
 
-/* ================== CART ================== */
+/* ================= CART ================= */
 function addItem(p) {
   const item = cart.find(i => i.id === p.id);
   item ? item.qty++ : cart.push({ ...p, qty: 1 });
@@ -125,7 +134,7 @@ function renderBill() {
   document.getElementById('total').innerText = total;
 }
 
-/* ================== PAYMENT ================== */
+/* ================= PAYMENT ================= */
 function checkout(type) {
   if (!cart.length) return alert('ยังไม่มีรายการ');
   const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
@@ -157,7 +166,7 @@ function calcChange() {
   document.getElementById('changeText').innerText = cash - total;
 }
 
-/* ================== CONFIRM ================== */
+/* ================= CONFIRM ================= */
 async function confirmPay(type) {
   const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
   if (type === 'cash') {
@@ -171,7 +180,11 @@ async function confirmPay(type) {
     .select()
     .single();
 
-  if (error) return alert('บันทึกไม่สำเร็จ');
+  if (error) {
+    alert('บันทึกไม่สำเร็จ');
+    console.error(error);
+    return;
+  }
 
   for (const i of cart) {
     await db.from('order_items').insert({
@@ -188,22 +201,36 @@ async function confirmPay(type) {
   alert('บันทึกเรียบร้อย');
 }
 
-/* ================== PROMPTPAY QR ================== */
+/* ================= PROMPTPAY QR ================= */
 function genQR(amount) {
   const payload = genPromptPayPayload(PROMPTPAY_ID, amount);
-  QRCode.toCanvas(document.getElementById('qrCanvas'), payload, { width: 220 });
+  const qr = qrcode(0, 'M');
+  qr.addData(payload);
+  qr.make();
+  document.getElementById('qrBox').innerHTML = qr.createSvgTag(6, 6);
 }
 
 function genPromptPayPayload(id, amount) {
-  function f(id,v){return id+v.length.toString().padStart(2,'0')+v}
-  let p="000201"+f("01","12")+f("29",f("00","A000000677010111")+f("01",id))
-  +f("53","764")+f("54",amount.toFixed(2))+f("58","TH")+f("62",f("07","POS"))+"6304";
+  function f(i,v){return i+v.length.toString().padStart(2,'0')+v}
+  let p="000201"
+    +f("01","12")
+    +f("29",f("00","A000000677010111")+f("01",id))
+    +f("53","764")
+    +f("54",amount.toFixed(2))
+    +f("58","TH")
+    +f("62",f("07","POS"))
+    +"6304";
   return p+crc16(p).toString(16).toUpperCase().padStart(4,'0');
 }
 
 function crc16(s){
   let c=0xFFFF;
-  for(let ch of s){c^=ch.charCodeAt(0)<<8;for(let i=0;i<8;i++)c=c&0x8000?(c<<1)^0x1021:c<<1}
+  for(let ch of s){
+    c^=ch.charCodeAt(0)<<8;
+    for(let i=0;i<8;i++){
+      c=c&0x8000?(c<<1)^0x1021:c<<1;
+    }
+  }
   return c&0xFFFF;
 }
 
