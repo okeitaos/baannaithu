@@ -38,7 +38,8 @@
 </div>
 
 <script>
-const supabase = supabase.createClient(
+/* 🔑 1. สร้าง client (ใช้ชื่อ db แทน supabase) */
+const db = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 );
@@ -46,24 +47,43 @@ const supabase = supabase.createClient(
 let products = [];
 let cart = [];
 
+/* 🔑 2. โหลดเมนู */
 async function loadProducts() {
-  const { data } = await supabase.from('products').select('*').eq('active', true);
+  const { data, error } = await db
+    .from('products')
+    .select('*')
+    .eq('active', true);
+
+  if (error) {
+    alert('โหลดเมนูไม่สำเร็จ');
+    console.error(error);
+    return;
+  }
+
   products = data;
   loadCategory('ขนมจีน');
 }
 
+/* 🔑 3. เปลี่ยนหมวด */
 function loadCategory(cat) {
   const menu = document.getElementById('menu');
   menu.innerHTML = '';
-  products.filter(p => p.category === cat).forEach(p => {
-    const btn = document.createElement('button');
-    btn.className = "bg-slate-700 p-4 rounded text-center";
-    btn.innerHTML = `<div class="text-lg">${p.name}</div><div>${p.price} บาท</div>`;
-    btn.onclick = () => addItem(p);
-    menu.appendChild(btn);
-  });
+
+  products
+    .filter(p => p.category === cat)
+    .forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = "bg-slate-700 p-4 rounded text-center";
+      btn.innerHTML = `
+        <div class="text-lg">${p.name}</div>
+        <div>${p.price} บาท</div>
+      `;
+      btn.onclick = () => addItem(p);
+      menu.appendChild(btn);
+    });
 }
 
+/* 🔑 4. เพิ่มรายการ */
 function addItem(p) {
   const item = cart.find(i => i.id === p.id);
   if (item) item.qty++;
@@ -71,30 +91,44 @@ function addItem(p) {
   renderBill();
 }
 
+/* 🔑 5. แสดงบิล */
 function renderBill() {
   const bill = document.getElementById('bill');
   bill.innerHTML = '';
   let total = 0;
+
   cart.forEach(i => {
-    total += i.price * i.qty;
-    bill.innerHTML += `<div>${i.name} x${i.qty} = ${i.price * i.qty}</div>`;
+    const sum = i.price * i.qty;
+    total += sum;
+    bill.innerHTML += `<div>${i.name} x${i.qty} = ${sum}</div>`;
   });
+
   document.getElementById('total').innerText = total;
 }
 
+/* 🔑 6. ชำระเงิน */
 async function checkout(payment) {
-  if (cart.length === 0) return alert('ยังไม่มีรายการ');
+  if (cart.length === 0) {
+    alert('ยังไม่มีรายการ');
+    return;
+  }
 
-  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+  const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
 
-  const { data: order } = await supabase
+  const { data: order, error } = await db
     .from('orders')
     .insert({ total, payment })
     .select()
     .single();
 
+  if (error) {
+    alert('บันทึกออเดอร์ไม่สำเร็จ');
+    console.error(error);
+    return;
+  }
+
   for (const i of cart) {
-    await supabase.from('order_items').insert({
+    await db.from('order_items').insert({
       order_id: order.id,
       product_name: i.name,
       qty: i.qty,
@@ -107,7 +141,9 @@ async function checkout(payment) {
   alert('บันทึกออเดอร์เรียบร้อย');
 }
 
+/* 🔑 เริ่มทำงาน */
 loadProducts();
 </script>
+
 </body>
 </html>
