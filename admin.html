@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>🛠️ Admin - ร้านขนมจีน</title>
+<title>🛠️ Admin Dashboard</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -12,144 +12,192 @@
 
 <body class="bg-slate-900 text-white p-4 space-y-6">
 
-<h1 class="text-xl font-bold">🛠️ Admin ร้านขนมจีน</h1>
+<h1 class="text-xl font-bold">🛠️ Admin Dashboard</h1>
 
-<!-- ================== จัดการโต๊ะ ================== -->
-<div class="bg-slate-800 p-4 rounded">
-  <h2 class="font-bold mb-2">🪑 จัดการโต๊ะ</h2>
+<!-- ================== หมวด ================== -->
+<section class="bg-slate-800 p-4 rounded">
+  <h2 class="font-bold mb-2">🗂️ หมวดสินค้า</h2>
 
-  <div class="flex gap-2 mb-3">
-    <input id="tName" placeholder="ชื่อโต๊ะ"
-      class="flex-1 p-2 text-black rounded">
-    <button onclick="addTable()" class="bg-emerald-600 px-4 rounded">
-      เพิ่มโต๊ะ
-    </button>
+  <div class="flex gap-2 mb-2">
+    <input id="catName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อหมวด">
+    <button onclick="addCategory()" class="bg-emerald-600 px-4 rounded">เพิ่ม</button>
   </div>
+
+  <div id="categoryList" class="text-sm"></div>
+</section>
+
+<!-- ================== เมนู ================== -->
+<section class="bg-slate-800 p-4 rounded">
+  <h2 class="font-bold mb-2">🍜 เมนู</h2>
+
+  <div class="grid grid-cols-3 gap-2 mb-3">
+    <input id="pName" class="p-2 text-black rounded" placeholder="ชื่อเมนู">
+    <select id="pCategory" class="p-2 text-black rounded"></select>
+    <input id="pPrice" type="number" class="p-2 text-black rounded" placeholder="ราคา">
+  </div>
+
+  <button onclick="addProduct()" class="bg-emerald-600 px-4 py-2 rounded mb-3">
+    เพิ่มเมนู
+  </button>
 
   <table class="w-full text-sm">
     <thead>
       <tr class="border-b border-slate-600">
-        <th class="text-left">โต๊ะ</th>
-        <th class="text-center">ใช้งาน</th>
-        <th class="text-center">ลบ</th>
+        <th>ชื่อ</th><th>ราคา</th><th>ขาย</th><th>ลบ</th>
       </tr>
     </thead>
-    <tbody id="tableList"></tbody>
+    <tbody id="productList"></tbody>
   </table>
-</div>
+</section>
 
-<!-- ================== ดูบิลตามโต๊ะ ================== -->
-<div class="bg-slate-800 p-4 rounded">
-  <h2 class="font-bold mb-2">🧾 ดูบิลตามโต๊ะ</h2>
+<!-- ================== โต๊ะ ================== -->
+<section class="bg-slate-800 p-4 rounded">
+  <h2 class="font-bold mb-2">🪑 โต๊ะ</h2>
 
-  <select id="tableSelect"
-    class="w-full p-2 mb-3 text-black rounded"
-    onchange="loadBillsByTable()">
-    <option value="">-- เลือกโต๊ะ --</option>
+  <div class="flex gap-2 mb-2">
+    <input id="tName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อโต๊ะ">
+    <button onclick="addTable()" class="bg-emerald-600 px-4 rounded">เพิ่ม</button>
+  </div>
+
+  <div id="tableList" class="text-sm"></div>
+</section>
+
+<!-- ================== บิลย้อนหลัง ================== -->
+<section class="bg-slate-800 p-4 rounded">
+  <h2 class="font-bold mb-2">🧾 บิลย้อนหลัง</h2>
+
+  <select id="billTableFilter" class="w-full p-2 text-black rounded mb-3"
+    onchange="loadBills()">
+    <option value="">ทุกโต๊ะ</option>
   </select>
 
-  <div id="billBox" class="text-sm space-y-2"></div>
-</div>
+  <div id="billList" class="space-y-2 text-sm"></div>
+</section>
 
 <script>
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ================= TABLE ================= */
-async function loadTables() {
-  const { data } = await db.from('tables').select('*').order('name');
-  tableList.innerHTML = '';
-  tableSelect.innerHTML = '<option value="">-- เลือกโต๊ะ --</option>';
+/* ---------- CATEGORY ---------- */
+async function loadCategories() {
+  const { data } = await db.from('categories').select('*');
+  categoryList.innerHTML = '';
+  pCategory.innerHTML = '';
 
-  data.forEach(t => {
-    // list
-    tableList.innerHTML += `
+  data.forEach(c => {
+    categoryList.innerHTML += `• ${c.name}<br>`;
+    pCategory.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+  });
+}
+
+async function addCategory() {
+  if (!catName.value) return;
+  await db.from('categories').insert({ name: catName.value });
+  catName.value = '';
+  loadCategories();
+}
+
+/* ---------- PRODUCTS ---------- */
+async function loadProducts() {
+  const { data } = await db.from('products').select('*').order('category');
+  productList.innerHTML = '';
+
+  data.forEach(p => {
+    productList.innerHTML += `
       <tr class="border-b border-slate-700">
-        <td>${t.name}</td>
-        <td class="text-center">
-          <input type="checkbox" ${t.active ? 'checked' : ''}
-            onchange="toggleTable('${t.id}', this.checked)">
-        </td>
-        <td class="text-center">
-          <button onclick="deleteTable('${t.id}','${t.name}')"
-            class="bg-red-600 px-2 py-1 rounded text-xs">
-            ลบ
-          </button>
-        </td>
-      </tr>
-    `;
-
-    // select
-    if (t.active) {
-      tableSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
-    }
+        <td>${p.name}</td>
+        <td><input type="number" value="${p.price}"
+          class="w-20 text-black rounded"
+          onchange="updatePrice('${p.id}',this.value)"></td>
+        <td><input type="checkbox" ${p.active?'checked':''}
+          onchange="toggleProduct('${p.id}',this.checked)"></td>
+        <td><button class="bg-red-600 px-2 rounded"
+          onclick="deleteProduct('${p.id}')">ลบ</button></td>
+      </tr>`;
   });
 }
 
-async function addTable() {
-  if (!tName.value) return alert('กรอกชื่อโต๊ะ');
-
-  await db.from('tables').insert({
-    name: tName.value,
-    active: true
+async function addProduct() {
+  await db.from('products').insert({
+    name:pName.value,
+    category:pCategory.value,
+    price:Number(pPrice.value),
+    active:true
   });
+  pName.value=pPrice.value='';
+  loadProducts();
+}
 
-  tName.value = '';
+async function updatePrice(id,price){
+  await db.from('products').update({price:Number(price)}).eq('id',id);
+}
+async function toggleProduct(id,active){
+  await db.from('products').update({active}).eq('id',id);
+}
+async function deleteProduct(id){
+  if(!confirm('ลบเมนู?'))return;
+  await db.from('products').delete().eq('id',id);
+  loadProducts();
+}
+
+/* ---------- TABLE ---------- */
+async function loadTables(){
+  const { data } = await db.from('tables').select('*');
+  tableList.innerHTML='';
+  billTableFilter.innerHTML='<option value="">ทุกโต๊ะ</option>';
+
+  data.forEach(t=>{
+    tableList.innerHTML+=`
+      <div>
+        ${t.name}
+        <input type="checkbox" ${t.active?'checked':''}
+          onchange="toggleTable('${t.id}',this.checked)">
+        <button onclick="deleteTable('${t.id}')">❌</button>
+      </div>`;
+    billTableFilter.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
+  });
+}
+
+async function addTable(){
+  if(!tName.value)return;
+  await db.from('tables').insert({name:tName.value,active:true});
+  tName.value='';
+  loadTables();
+}
+async function toggleTable(id,active){
+  await db.from('tables').update({active}).eq('id',id);
+}
+async function deleteTable(id){
+  if(!confirm('ลบโต๊ะ?'))return;
+  await db.from('tables').delete().eq('id',id);
   loadTables();
 }
 
-async function toggleTable(id, active) {
-  await db.from('tables').update({ active }).eq('id', id);
-  loadTables();
-}
+/* ---------- BILLS ---------- */
+async function loadBills(){
+  const tableId=billTableFilter.value;
+  let q=db.from('orders').select('*').order('created_at',{ascending:false}).limit(10);
+  if(tableId) q=q.eq('table_id',tableId);
 
-async function deleteTable(id, name) {
-  if (!confirm(`ลบโต๊ะ ${name} ?`)) return;
-  await db.from('tables').delete().eq('id', id);
-  loadTables();
-}
+  const { data:orders }=await q;
+  billList.innerHTML='';
 
-/* ================= BILLS ================= */
-async function loadBillsByTable() {
-  const tableId = tableSelect.value;
-  billBox.innerHTML = '';
-
-  if (!tableId) return;
-
-  const { data: orders } = await db
-    .from('orders')
-    .select('*')
-    .eq('table_id', tableId)
-    .order('created_at', { ascending: false })
-    .limit(5);
-
-  if (!orders.length) {
-    billBox.innerHTML = '<div class="opacity-60">ยังไม่มีบิล</div>';
-    return;
+  for(const o of orders){
+    const { data:items }=await db.from('order_items').select('*').eq('order_id',o.id);
+    billList.innerHTML+=`
+      <div class="border p-2 rounded">
+        <div class="font-bold">${o.total} บาท (${o.payment})</div>
+        ${items.map(i=>`<div>- ${i.product_name}</div>`).join('')}
+      </div>`;
   }
-
-  for (const o of orders) {
-    const { data: items } = await db
-      .from('order_items')
-      .select('*')
-      .eq('order_id', o.id);
-
-    billBox.innerHTML += `
-      <div class="border border-slate-600 p-2 rounded">
-        <div class="font-bold">
-          ยอด ${o.total} บาท (${o.payment})
-        </div>
-        ${items.map(i => `
-          <div>- ${i.product_name} (${i.price})</div>
-        `).join('')}
-      </div>
-    `;
-  }
 }
 
-/* ================= START ================= */
+/* ---------- START ---------- */
+loadCategories();
+loadProducts();
 loadTables();
+loadBills();
 </script>
 
 </body>
