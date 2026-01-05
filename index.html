@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POS ร้านขนมจีน</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-900 text-white p-3">
+
+<h1 class="text-xl font-bold text-center mb-3">🍜 POS ร้านขนมจีน</h1>
+
+<!-- หมวด -->
+<div class="flex gap-2 mb-3">
+  <button onclick="loadCategory('ขนมจีน')" class="flex-1 bg-orange-600 py-2 rounded">ขนมจีน</button>
+  <button onclick="loadCategory('น้ำ')" class="flex-1 bg-sky-600 py-2 rounded">น้ำ</button>
+  <button onclick="loadCategory('ทานเล่น')" class="flex-1 bg-green-600 py-2 rounded">ทานเล่น</button>
+</div>
+
+<!-- เมนู -->
+<div id="menu" class="grid grid-cols-2 gap-2 mb-3"></div>
+
+<!-- บิล -->
+<div class="bg-slate-800 p-3 rounded mb-3">
+  <div id="bill"></div>
+  <div class="border-t border-slate-600 mt-2 pt-2 text-lg font-bold">
+    รวม: <span id="total">0</span> บาท
+  </div>
+</div>
+
+<!-- ชำระเงิน -->
+<div class="flex gap-2">
+  <button onclick="checkout('cash')" class="flex-1 bg-emerald-600 py-3 rounded text-lg">💵 เงินสด</button>
+  <button onclick="checkout('transfer')" class="flex-1 bg-indigo-600 py-3 rounded text-lg">📲 โอนเงิน</button>
+</div>
+
+<script>
+const supabase = supabase.createClient(
+  "https://nvsptbbvxjulrpdebrhn.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+);
+
+let products = [];
+let cart = [];
+
+async function loadProducts() {
+  const { data } = await supabase.from('products').select('*').eq('active', true);
+  products = data;
+  loadCategory('ขนมจีน');
+}
+
+function loadCategory(cat) {
+  const menu = document.getElementById('menu');
+  menu.innerHTML = '';
+  products.filter(p => p.category === cat).forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = "bg-slate-700 p-4 rounded text-center";
+    btn.innerHTML = `<div class="text-lg">${p.name}</div><div>${p.price} บาท</div>`;
+    btn.onclick = () => addItem(p);
+    menu.appendChild(btn);
+  });
+}
+
+function addItem(p) {
+  const item = cart.find(i => i.id === p.id);
+  if (item) item.qty++;
+  else cart.push({ ...p, qty: 1 });
+  renderBill();
+}
+
+function renderBill() {
+  const bill = document.getElementById('bill');
+  bill.innerHTML = '';
+  let total = 0;
+  cart.forEach(i => {
+    total += i.price * i.qty;
+    bill.innerHTML += `<div>${i.name} x${i.qty} = ${i.price * i.qty}</div>`;
+  });
+  document.getElementById('total').innerText = total;
+}
+
+async function checkout(payment) {
+  if (cart.length === 0) return alert('ยังไม่มีรายการ');
+
+  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+
+  const { data: order } = await supabase
+    .from('orders')
+    .insert({ total, payment })
+    .select()
+    .single();
+
+  for (const i of cart) {
+    await supabase.from('order_items').insert({
+      order_id: order.id,
+      product_name: i.name,
+      qty: i.qty,
+      price: i.price
+    });
+  }
+
+  cart = [];
+  renderBill();
+  alert('บันทึกออเดอร์เรียบร้อย');
+}
+
+loadProducts();
+</script>
+</body>
+</html>
