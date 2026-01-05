@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🛠️ Admin Dashboard</title>
 
-<!-- SUPABASE SDK -->
+<!-- SUPABASE -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <!-- UI -->
@@ -18,9 +18,7 @@
 
 <h1 class="text-2xl font-bold text-center">🛠️ Admin Dashboard</h1>
 
-<!-- =================================================
-🔥 CONNECT SUPABASE (หัวใจ)
-================================================= -->
+<!-- ================= CONNECT SUPABASE ================= -->
 <script>
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
@@ -117,16 +115,14 @@ const Toast = Swal.mixin({
 <script>
 /* ---------- UTIL ---------- */
 function thaiRange(d){
-  const s=new Date(d+'T00:00:00+07:00');
-  const e=new Date(d+'T23:59:59+07:00');
-  return {start:s.toISOString(),end:e.toISOString()};
+  const s = new Date(d + 'T00:00:00+07:00');
+  const e = new Date(d + 'T23:59:59+07:00');
+  return { start:s.toISOString(), end:e.toISOString() };
 }
 
 /* ---------- CATEGORY ---------- */
 async function loadCategories(){
-  const {data,error}=await db.from('categories').select('*').order('name');
-  if(error) return console.error(error);
-
+  const { data } = await db.from('categories').select('*').order('name');
   categoryList.innerHTML='';
   pCategory.innerHTML='';
   data.forEach(c=>{
@@ -140,13 +136,13 @@ async function loadCategories(){
 }
 async function addCategory(){
   if(!catName.value) return;
-  await db.from('categories').insert({name:catName.value});
+  await db.from('categories').insert({ name:catName.value });
   catName.value='';
-  Toast.fire({icon:'success',title:'เพิ่มหมวดแล้ว'});
+  Toast.fire({ icon:'success', title:'เพิ่มหมวดแล้ว' });
   loadCategories();
 }
 async function deleteCategory(id,name){
-  const {data}=await db.from('products').select('id').eq('category',name).limit(1);
+  const { data } = await db.from('products').select('id').eq('category',name).limit(1);
   if(data.length){
     Swal.fire('ลบไม่ได้','ยังมีสินค้าใช้หมวดนี้','warning');
     return;
@@ -157,9 +153,7 @@ async function deleteCategory(id,name){
 
 /* ---------- PRODUCT ---------- */
 async function loadProducts(){
-  const {data,error}=await db.from('products').select('*').order('category');
-  if(error) return console.error(error);
-
+  const { data } = await db.from('products').select('*').order('category');
   productList.innerHTML='';
   data.forEach(p=>{
     productList.innerHTML+=`
@@ -168,11 +162,11 @@ async function loadProducts(){
         <td>
           <input type="number" value="${p.price}"
             class="w-20 text-black px-1"
-            onchange="updateProductPrice('${p.id}',this.value)">
+            onchange="updateProductPrice('${p.id}', this.value)">
         </td>
         <td class="text-center">
           <input type="checkbox" ${p.active?'checked':''}
-            onchange="toggleProductActive('${p.id}',this.checked)">
+            onchange="toggleProductActive('${p.id}', this.checked)">
         </td>
         <td class="text-center">
           <button onclick="deleteProduct('${p.id}','${p.name}')">ลบ</button>
@@ -192,58 +186,62 @@ async function addProduct(){
   loadProducts();
 }
 async function updateProductPrice(id,price){
-  const {error}=await db.from('products')
-    .update({price:Number(price)})
-    .eq('id',id);
-  if(error){
-    Swal.fire('แก้ราคาไม่สำเร็จ',error.message,'error');
-  }
+  await db.from('products').update({ price:Number(price) }).eq('id',id);
 }
 async function toggleProductActive(id,active){
-  const {error}=await db.from('products')
-    .update({active})
-    .eq('id',id);
-  if(error){
-    Swal.fire('เปลี่ยนสถานะไม่สำเร็จ',error.message,'error');
-  }
+  await db.from('products').update({ active }).eq('id',id);
 }
 async function deleteProduct(id,name){
-  const res=await Swal.fire({
+  const res = await Swal.fire({
     title:`ลบ "${name}" ?`,
     icon:'warning',
     showCancelButton:true,
     confirmButtonColor:'#dc2626'
   });
   if(!res.isConfirmed) return;
-
-  const {error}=await db.from('products').delete().eq('id',id);
-  if(error){
-    Swal.fire('ลบไม่สำเร็จ',error.message,'error');
-  }else{
-    Toast.fire({icon:'success',title:'ลบสินค้าแล้ว'});
-    loadProducts();
-  }
+  await db.from('products').delete().eq('id',id);
+  loadProducts();
 }
 
 /* ---------- TABLE ---------- */
 async function loadTables(){
-  const {data,error}=await db.from('tables').select('*').order('name');
-  if(error) return console.error(error);
-
+  const { data } = await db.from('tables').select('*').order('name');
   tableList.innerHTML='';
   data.forEach(t=>{
     tableList.innerHTML+=`
-      <div class="flex justify-between bg-slate-700 p-2 rounded">
-        ${t.name}
-        <input type="checkbox" ${t.active?'checked':''}
-          onchange="db.from('tables').update({active:this.checked}).eq('id','${t.id}')">
+      <div class="flex justify-between items-center bg-slate-700 p-2 rounded">
+        <span>${t.name}</span>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-1 text-sm">
+            <input type="checkbox" ${t.active?'checked':''}
+              onchange="toggleTableActive('${t.id}', this.checked)">
+            เปิด
+          </label>
+          <button class="text-red-400"
+            onclick="deleteTable('${t.id}','${t.name}')">🗑</button>
+        </div>
       </div>`;
   });
 }
 async function addTable(){
   if(!tName.value) return;
-  await db.from('tables').insert({name:tName.value,active:true});
+  await db.from('tables').insert({ name:tName.value, active:true });
   tName.value='';
+  loadTables();
+}
+async function toggleTableActive(id,active){
+  await db.from('tables').update({ active }).eq('id',id);
+}
+async function deleteTable(id,name){
+  const res = await Swal.fire({
+    title:`ลบโต๊ะ "${name}" ?`,
+    text:'บิลเก่าจะยังอยู่',
+    icon:'warning',
+    showCancelButton:true,
+    confirmButtonColor:'#dc2626'
+  });
+  if(!res.isConfirmed) return;
+  await db.from('tables').delete().eq('id',id);
   loadTables();
 }
 
@@ -252,7 +250,7 @@ async function loadBills(){
   const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
 
-  const {data:orders,error}=await db
+  const { data:orders } = await db
     .from('orders')
     .select(`
       id,total,created_at,
@@ -261,11 +259,6 @@ async function loadBills(){
     .gte('created_at',start)
     .lte('created_at',end)
     .order('created_at',{ascending:false});
-
-  if(error){
-    Swal.fire('โหลดบิลไม่ได้',error.message,'error');
-    return;
-  }
 
   billList.innerHTML='';
   let sum=0;
@@ -281,12 +274,12 @@ async function loadBills(){
   drawChart(orders);
 }
 
-/* ---------- EXPORT ---------- */
+/* ---------- EXPORT (UTF-8 BOM FIX) ---------- */
 async function exportExcel(){
-  const d=billDate.value;if(!d)return;
+  const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
 
-  const {data:orders}=await db
+  const { data:orders } = await db
     .from('orders')
     .select(`
       order_items!order_items_order_id_fkey(product_name,qty,price)
@@ -301,9 +294,10 @@ async function exportExcel(){
     });
   });
 
-  const csv=rows.map(r=>r.join(',')).join('\n');
+  const csvContent = '\ufeff' + rows.map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csvContent], { type:'text/csv;charset=utf-8;' });
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.href=URL.createObjectURL(blob);
   a.download=`ยอดขาย_${d}.csv`;
   a.click();
 }
@@ -315,19 +309,15 @@ function drawChart(orders){
     orders.filter(o=>new Date(o.created_at).getHours()===x)
           .reduce((s,o)=>s+o.total,0)
   );
-
   if(window.salesChart && typeof window.salesChart.destroy==='function'){
     window.salesChart.destroy();
   }
-
   window.salesChart=new Chart(
     document.getElementById('salesChart'),
     {
       type:'bar',
-      data:{
-        labels:h.map(x=>`${x}:00`),
-        datasets:[{label:'ยอดขาย',data:totals}]
-      }
+      data:{ labels:h.map(x=>`${x}:00`),
+        datasets:[{ label:'ยอดขาย', data:totals }] }
     }
   );
 }
