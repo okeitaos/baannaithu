@@ -37,6 +37,13 @@
   <button onclick="checkout('transfer')" class="flex-1 bg-indigo-600 py-3 rounded text-lg">📲 โอนเงิน</button>
 </div>
 
+<!-- ปุ่มยกเลิกออเดอร์ -->
+<button
+  onclick="cancelOrder()"
+  class="w-full mt-2 bg-red-600 py-2 rounded text-lg">
+  ❌ ยกเลิกออเดอร์
+</button>
+
 <!-- MODAL -->
 <div id="payModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
   <div class="bg-slate-800 p-4 rounded w-80">
@@ -67,8 +74,11 @@
       </button>
     </div>
 
-    <button onclick="closeModal()" class="mt-3 w-full bg-slate-600 py-1 rounded">
-      ยกเลิก
+    <!-- ยกเลิกใน modal -->
+    <button
+      onclick="cancelOrder()"
+      class="mt-3 w-full bg-red-600 py-1 rounded">
+      ❌ ยกเลิกออเดอร์
     </button>
   </div>
 </div>
@@ -77,14 +87,7 @@
 /* ================= CONFIG ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
-
-/*
-  PROMPTPAY_ID ใส่ได้ 3 แบบ
-  - เบอร์โทร: 0812345678
-  - เลขบัตรประชาชน
-  - เลขผู้เสียภาษี
-*/
-const PROMPTPAY_ID = "0936494961";
+const PROMPTPAY_ID = "0936494961"; // เบอร์ / บัตร ปชช / เลขผู้เสียภาษี
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -149,11 +152,8 @@ function checkout(type) {
   if (type === 'transfer') {
     document.getElementById('payTitle').innerText = `📲 โอนเงิน ${total} บาท`;
     document.getElementById('transferBox').classList.remove('hidden');
-
-    // 🔥 ใช้ promptpay.io (สแกนได้จริง)
-    const amount = total.toFixed(2);
     document.getElementById('ppQR').src =
-      `https://promptpay.io/${PROMPTPAY_ID}/${amount}.png`;
+      `https://promptpay.io/${PROMPTPAY_ID}/${total.toFixed(2)}.png`;
   } else {
     document.getElementById('payTitle').innerText = `💵 เงินสด ${total} บาท`;
     document.getElementById('cashBox').classList.remove('hidden');
@@ -208,6 +208,17 @@ async function confirmPay(type) {
   alert('บันทึกเรียบร้อย');
 }
 
+/* ================= CANCEL ORDER ================= */
+function cancelOrder() {
+  if (!cart.length) return;
+  if (!confirm('ต้องการยกเลิกออเดอร์นี้ใช่หรือไม่?')) return;
+
+  cart = [];
+  renderBill();
+  closeModal();
+}
+
+/* ================= START ================= */
 loadProducts();
 </script>
 
