@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🛠️ Admin Dashboard</title>
 
-<!-- LIB -->
+<!-- ===== 1) SUPABASE SDK (ห้ามลบ) ===== -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- ===== 2) UI LIB ===== -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -16,13 +18,18 @@
 
 <h1 class="text-2xl font-bold text-center">🛠️ Admin Dashboard</h1>
 
-<!-- ================= SUPABASE CONNECT ================= -->
+<!-- =================================================
+🔥🔥🔥 CONNECT SUPABASE (ตรงนี้แหละ ตัวเชื่อม)
+================================================= -->
 <script>
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
 
+/* 🔥 ตัวเชื่อมจริง ๆ อยู่บรรทัดนี้ */
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log('Supabase connected', db);
+
+/* เช็กให้หายหงุดหงิด */
+console.log("SUPABASE CONNECTED =", db);
 </script>
 
 <!-- ================= TOAST ================= -->
@@ -31,182 +38,236 @@ const Toast = Swal.mixin({
   toast:true,
   position:'top-end',
   showConfirmButton:false,
-  timer:1800,
+  timer:1500,
   background:'#1e293b',
   color:'#fff'
 });
 </script>
 
-<!-- ================= BILLS ================= -->
+<!-- ================= CATEGORY ================= -->
 <section class="bg-slate-800 p-4 rounded-xl space-y-3">
-  <h2 class="font-bold text-lg">🧾 บิลรายวัน</h2>
+  <h2 class="font-bold">🗂️ หมวดสินค้า</h2>
+  <div class="flex gap-2">
+    <input id="catName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อหมวด">
+    <button onclick="addCategory()" class="bg-emerald-600 px-4 rounded">เพิ่ม</button>
+  </div>
+  <div id="categoryList" class="space-y-1"></div>
+</section>
+
+<!-- ================= PRODUCT ================= -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold">🍜 สินค้า</h2>
+
+  <div class="grid grid-cols-3 gap-2">
+    <input id="pName" class="p-2 text-black rounded" placeholder="ชื่อสินค้า">
+    <select id="pCategory" class="p-2 text-black rounded"></select>
+    <input id="pPrice" type="number" class="p-2 text-black rounded" placeholder="ราคา">
+  </div>
+
+  <button onclick="addProduct()" class="bg-emerald-600 px-4 py-2 rounded">
+    ➕ เพิ่มสินค้า
+  </button>
+
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-slate-600">
+        <th>ชื่อ</th><th>ราคา</th><th>ขาย</th><th>ลบ</th>
+      </tr>
+    </thead>
+    <tbody id="productList"></tbody>
+  </table>
+</section>
+
+<!-- ================= TABLE ================= -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold">🪑 โต๊ะ</h2>
+  <div class="flex gap-2">
+    <input id="tName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อโต๊ะ">
+    <button onclick="addTable()" class="bg-emerald-600 px-4 rounded">เพิ่มโต๊ะ</button>
+  </div>
+  <div id="tableList" class="space-y-1"></div>
+</section>
+
+<!-- ================= BILL ================= -->
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+  <h2 class="font-bold">🧾 บิลรายวัน</h2>
 
   <input type="date" id="billDate"
     class="p-2 text-black rounded"
-    onchange="loadBillsByDate()">
+    onchange="loadBills()">
 
   <div class="font-bold">
-    รวมทั้งวัน:
-    <span id="dailyTotal" class="text-emerald-400">0</span> บาท
+    รวม: <span id="dailyTotal" class="text-emerald-400">0</span> บาท
   </div>
 
-  <button onclick="exportDailyExcel()"
-    class="bg-emerald-600 px-3 py-1 rounded">
+  <button onclick="exportExcel()" class="bg-emerald-600 px-3 py-1 rounded">
     📤 Export Excel
   </button>
 
   <div id="billList" class="space-y-2 text-sm"></div>
 </section>
 
-<!-- ================= DASHBOARD ================= -->
-<section class="bg-slate-800 p-4 rounded-xl space-y-4">
-  <h2 class="font-bold text-lg">📊 กราฟยอดขายรายวัน</h2>
-  <canvas id="salesChart" height="120"></canvas>
+<!-- ================= CHART ================= -->
+<section class="bg-slate-800 p-4 rounded-xl">
+  <h2 class="font-bold mb-2">📊 กราฟยอดขาย</h2>
+  <canvas id="salesChart"></canvas>
 </section>
 
 <!-- ================= LOGIC ================= -->
 <script>
-/* ===== TIME (TH) ===== */
-function getThaiDayRange(dateStr){
-  const s = new Date(dateStr + 'T00:00:00+07:00');
-  const e = new Date(dateStr + 'T23:59:59+07:00');
-  return { start: s.toISOString(), end: e.toISOString() };
+function thaiRange(d){
+  const s=new Date(d+'T00:00:00+07:00');
+  const e=new Date(d+'T23:59:59+07:00');
+  return {start:s.toISOString(),end:e.toISOString()};
 }
 
-/* ===== LOAD BILLS (FIX 400) ===== */
-async function loadBillsByDate(){
-  const d = billDate.value;
-  if(!d) return;
+/* CATEGORY */
+async function loadCategories(){
+  const {data}=await db.from('categories').select('*').order('name');
+  categoryList.innerHTML='';
+  pCategory.innerHTML='';
+  data.forEach(c=>{
+    categoryList.innerHTML+=`
+      <div class="flex justify-between bg-slate-700 p-2 rounded">
+        ${c.name}
+        <button onclick="deleteCategory('${c.id}','${c.name}')">🗑</button>
+      </div>`;
+    pCategory.innerHTML+=`<option>${c.name}</option>`;
+  });
+}
+async function addCategory(){
+  if(!catName.value)return;
+  await db.from('categories').insert({name:catName.value});
+  catName.value=''; loadCategories();
+}
+async function deleteCategory(id,name){
+  const {data}=await db.from('products').select('id').eq('category',name).limit(1);
+  if(data.length){ alert('ยังมีสินค้าใช้หมวดนี้'); return; }
+  await db.from('categories').delete().eq('id',id);
+  loadCategories();
+}
 
-  const { start, end } = getThaiDayRange(d);
+/* PRODUCT */
+async function loadProducts(){
+  const {data}=await db.from('products').select('*').order('category');
+  productList.innerHTML='';
+  data.forEach(p=>{
+    productList.innerHTML+=`
+      <tr>
+        <td>${p.name}</td>
+        <td><input type="number" value="${p.price}"
+          onchange="db.from('products').update({price:this.value}).eq('id','${p.id}')"></td>
+        <td><input type="checkbox" ${p.active?'checked':''}
+          onchange="db.from('products').update({active:this.checked}).eq('id','${p.id}')"></td>
+        <td><button onclick="db.from('products').delete().eq('id','${p.id}');loadProducts()">ลบ</button></td>
+      </tr>`;
+  });
+}
+async function addProduct(){
+  if(!pName.value||!pPrice.value)return;
+  await db.from('products').insert({
+    name:pName.value,category:pCategory.value,price:+pPrice.value,active:true
+  });
+  pName.value=pPrice.value=''; loadProducts();
+}
 
-  const { data: orders, error } = await db
+/* TABLE */
+async function loadTables(){
+  const {data}=await db.from('tables').select('*').order('name');
+  tableList.innerHTML='';
+  data.forEach(t=>{
+    tableList.innerHTML+=`
+      <div class="flex justify-between bg-slate-700 p-2 rounded">
+        ${t.name}
+        <input type="checkbox" ${t.active?'checked':''}
+          onchange="db.from('tables').update({active:this.checked}).eq('id','${t.id}')">
+      </div>`;
+  });
+}
+async function addTable(){
+  if(!tName.value)return;
+  await db.from('tables').insert({name:tName.value,active:true});
+  tName.value=''; loadTables();
+}
+
+/* BILL */
+async function loadBills(){
+  const d=billDate.value; if(!d)return;
+  const {start,end}=thaiRange(d);
+
+  const {data:orders}=await db
     .from('orders')
     .select(`
-      id,
-      total,
-      payment,
-      created_at,
-      order_items!order_items_order_id_fkey (
-        product_name,
-        qty,
-        price
-      )
+      id,total,created_at,
+      order_items!order_items_order_id_fkey(product_name,qty,price)
     `)
-    .eq('status','paid')
-    .gte('created_at', start)
-    .lte('created_at', end)
-    .order('created_at', { ascending:false });
+    .gte('created_at',start)
+    .lte('created_at',end)
+    .order('created_at',{ascending:false});
 
-  if(error){
-    console.error(error);
-    Swal.fire({
-      icon:'error',
-      title:'โหลดบิลไม่สำเร็จ',
-      text:error.message
-    });
-    return;
-  }
-
-  billList.innerHTML = '';
-  let sum = 0;
-
+  billList.innerHTML=''; let sum=0;
   orders.forEach(o=>{
-    sum += o.total;
-
-    billList.innerHTML += `
-      <div class="border border-slate-600 p-2 rounded">
-        <div class="flex justify-between font-bold">
-          <span>
-            ${new Date(o.created_at)
-              .toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}
-          </span>
-          <span>${o.total} บาท</span>
-        </div>
-
-        ${o.order_items.map(i =>
-          `<div>- ${i.product_name} × ${i.qty}</div>`
-        ).join('')}
-      </div>
-    `;
+    sum+=o.total;
+    billList.innerHTML+=`
+      <div class="border p-2 rounded">
+        <b>${o.total} บาท</b>
+        ${o.order_items.map(i=>`<div>- ${i.product_name} × ${i.qty}</div>`).join('')}
+      </div>`;
   });
-
-  dailyTotal.innerText = sum;
+  dailyTotal.innerText=sum;
   drawChart(orders);
 }
 
-/* ===== EXPORT ===== */
-async function exportDailyExcel(){
-  const d = billDate.value;
-  if(!d) return;
+/* EXPORT */
+async function exportExcel(){
+  const d=billDate.value;if(!d)return;
+  const {start,end}=thaiRange(d);
 
-  const { start, end } = getThaiDayRange(d);
-
-  const { data: orders, error } = await db
+  const {data:orders}=await db
     .from('orders')
     .select(`
-      created_at,
-      order_items!order_items_order_id_fkey (
-        product_name,
-        qty,
-        price
-      )
+      order_items!order_items_order_id_fkey(product_name,qty,price)
     `)
-    .eq('status','paid')
-    .gte('created_at', start)
-    .lte('created_at', end);
+    .gte('created_at',start)
+    .lte('created_at',end);
 
-  if(error){
-    Swal.fire({ icon:'error', title:error.message });
-    return;
-  }
-
-  let rows = [['เวลา','สินค้า','จำนวน','รวม']];
+  let rows=[['สินค้า','จำนวน','รวม']];
   orders.forEach(o=>{
     o.order_items.forEach(i=>{
-      rows.push([
-        new Date(o.created_at)
-          .toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),
-        i.product_name,
-        i.qty,
-        i.qty * i.price
-      ]);
+      rows.push([i.product_name,i.qty,i.qty*i.price]);
     });
   });
-
-  const csv = rows.map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `ยอดขาย_${d}.csv`;
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`ยอดขาย_${d}.csv`;
   a.click();
 }
 
-/* ===== CHART ===== */
+/* CHART (FIX BUG) */
 function drawChart(orders){
-  const hours = [...Array(24).keys()];
-  const totals = hours.map(h =>
-    orders
-      .filter(o => new Date(o.created_at).getHours() === h)
-      .reduce((s,o)=>s+o.total,0)
-  );
+  const h=[...Array(24).keys()];
+  const totals=h.map(x=>orders.filter(o=>new Date(o.created_at).getHours()===x)
+    .reduce((s,o)=>s+o.total,0));
 
-  if(window.salesChart) window.salesChart.destroy();
-  window.salesChart = new Chart(
-    document.getElementById('salesChart'),
-    {
+  if(window.salesChart && typeof window.salesChart.destroy==='function'){
+    window.salesChart.destroy();
+  }
+
+  window.salesChart=new Chart(
+    document.getElementById('salesChart'),{
       type:'bar',
-      data:{
-        labels:hours.map(h=>`${h}:00`),
-        datasets:[{label:'ยอดขาย (บาท)',data:totals}]
-      }
-    }
-  );
+      data:{labels:h.map(x=>`${x}:00`),
+      datasets:[{data:totals,label:'ยอดขาย'}]}
+    });
 }
 
-/* ===== INIT ===== */
-billDate.value = new Date().toISOString().split('T')[0];
-loadBillsByDate();
+/* INIT */
+loadCategories();
+loadProducts();
+loadTables();
+billDate.value=new Date().toISOString().split('T')[0];
+loadBills();
 </script>
 
 </body>
