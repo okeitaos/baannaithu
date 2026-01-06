@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>🍜 POS หน้าร้าน</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -11,15 +11,15 @@
 
 <body class="bg-slate-900 text-white min-h-screen p-4">
 
-<div class="grid grid-cols-12 gap-4 max-w-7xl mx-auto">
+<div class="max-w-7xl mx-auto grid grid-cols-12 gap-4">
 
-  <!-- TABLES -->
+  <!-- ================= โต๊ะ ================= -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">🪑 โต๊ะ</h2>
     <div id="tableList" class="grid grid-cols-2 gap-2"></div>
   </div>
 
-  <!-- MENU -->
+  <!-- ================= เมนู ================= -->
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
@@ -29,26 +29,22 @@
       <button id="btn-snack" class="px-3 py-1 rounded bg-slate-600">🍢 ทานเล่น</button>
     </div>
 
-    <div id="menuList" class="space-y-2"></div>
+    <div id="menuList" class="space-y-3"></div>
   </div>
 
-  <!-- ORDER -->
+  <!-- ================= บิล ================= -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">
       🧾 โต๊ะ <span id="currentTable">-</span>
     </h2>
 
-    <div id="orderItems" class="space-y-2 mb-3"></div>
+    <div id="orderItems" class="space-y-2 mb-4"></div>
 
     <div class="border-t pt-3">
-      <div class="flex justify-between font-bold">
+      <div class="flex justify-between font-bold text-lg">
         <span>รวม</span>
         <span id="totalPrice">0 ฿</span>
       </div>
-
-      <button id="payBtn" class="w-full mt-3 bg-green-600 py-2 rounded">
-        💰 คิดเงิน
-      </button>
     </div>
   </div>
 
@@ -57,52 +53,56 @@
 <script>
 /* ================= CONFIG ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co"
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 /* ================= STATE ================= */
-let currentCategory = 'ขนมจีน'
+let currentCategory = "ขนมจีน"
 
 let selectedTableId = null
 let selectedTableNo = null
 let currentOrderId = null
 
 let noodleMenus = []
-const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
+const restrictedMixTargets = ["แกงปู", "น้ำชุบหยำ"]
 
-/* ================= CATEGORY ================= */
-function setCategory(cat) {
-  currentCategory = cat
-  loadMenu()
-}
-
-/* ================= TABLES ================= */
+/* ================= LOAD TABLES ================= */
 async function loadTables() {
-  const { data } = await sb.from("tables").select("*").order("table_no")
+  const { data, error } = await sb
+    .from("tables")
+    .select("*")
+    .order("table_no")
+
+  if (error) {
+    alert("โหลดโต๊ะไม่ได้")
+    console.error(error)
+    return
+  }
+
   tableList.innerHTML = ""
 
-  ;(data || []).forEach(t => {
+  data.forEach(t => {
     const btn = document.createElement("button")
 
     let cls = "p-2 rounded font-bold "
     if (selectedTableId === t.id) cls += "bg-yellow-500"
-    else if (t.status === 'occupied') cls += "bg-red-600"
+    else if (t.status === "occupied") cls += "bg-red-600"
     else cls += "bg-green-600"
 
     btn.className = cls
     btn.textContent = "โต๊ะ " + t.table_no
 
-    btn.addEventListener("click", () => {
-      selectTable(t)
-    })
+    btn.onclick = () => selectTable(t)
 
     tableList.appendChild(btn)
   })
 }
 
+/* ================= SELECT TABLE ================= */
 function selectTable(t) {
+  // ถ้ามี order แล้ว ห้ามเปลี่ยนโต๊ะ
   if (currentOrderId && selectedTableId !== t.id) {
-    alert("❌ ต้องคิดเงินโต๊ะเดิมก่อน")
+    alert("❌ โต๊ะนี้กำลังใช้งาน ต้องจ่ายเงินก่อน")
     return
   }
 
@@ -110,7 +110,7 @@ function selectTable(t) {
   selectedTableNo = t.table_no
   currentTable.textContent = t.table_no
 
-  if (t.status === 'occupied' && t.current_order_id) {
+  if (t.status === "occupied" && t.current_order_id) {
     currentOrderId = t.current_order_id
     loadOrderItems()
   } else {
@@ -120,6 +120,21 @@ function selectTable(t) {
   }
 
   loadTables()
+}
+
+/* ================= CATEGORY ================= */
+function setCategory(cat) {
+  currentCategory = cat
+
+  btnNoodle.className = "px-3 py-1 rounded bg-slate-600"
+  btnDrink.className  = "px-3 py-1 rounded bg-slate-600"
+  btnSnack.className  = "px-3 py-1 rounded bg-slate-600"
+
+  if (cat === "ขนมจีน") btnNoodle.className = "px-3 py-1 rounded bg-orange-600"
+  if (cat === "เครื่องดื่ม") btnDrink.className = "px-3 py-1 rounded bg-blue-600"
+  if (cat === "ทานเล่น") btnSnack.className = "px-3 py-1 rounded bg-green-600"
+
+  loadMenu()
 }
 
 /* ================= MIX RULE ================= */
@@ -132,9 +147,9 @@ function getAllowedMixOptions(mainName) {
   )
 }
 
-/* ================= MENU ================= */
+/* ================= LOAD MENU ================= */
 async function loadMenu() {
-  const { data } = await sb
+  const { data: products } = await sb
     .from("products")
     .select("*")
     .eq("active", true)
@@ -150,14 +165,14 @@ async function loadMenu() {
   noodleMenus = noodles || []
   menuList.innerHTML = ""
 
-  ;(data || []).forEach(p => {
-    const div = document.createElement("div")
-    div.className = "bg-slate-700 p-3 rounded"
+  ;(products || []).forEach(p => {
+    const card = document.createElement("div")
+    card.className = "bg-slate-700 p-3 rounded relative"
 
     let options = ""
-    if (p.category === 'ขนมจีน') {
+    if (p.category === "ขนมจีน") {
       options += `
-        <label class="block text-sm">
+        <label class="block text-sm mt-2">
           <input type="checkbox" id="sp_${p.id}"> พิเศษ (+10)
         </label>
       `
@@ -175,38 +190,45 @@ async function loadMenu() {
       }
     }
 
-    div.innerHTML = `
-      <div class="flex justify-between">
+    card.innerHTML = `
+      <div class="flex justify-between items-center">
         <div>
           <div class="font-bold">${p.name}</div>
           <div class="text-sm">${p.price} บาท</div>
         </div>
-        <button class="add-btn bg-blue-600 px-3 rounded">เพิ่ม</button>
+        <button class="add-btn bg-blue-600 px-4 py-2 rounded z-10 relative">
+          เพิ่ม
+        </button>
       </div>
-      <div class="mt-2">${options}</div>
+      ${options}
     `
 
-    div.querySelector(".add-btn").addEventListener("click", () => {
-      addItem(p)
-    })
+    card.querySelector(".add-btn").onclick = () => addItem(p)
 
-    menuList.appendChild(div)
+    menuList.appendChild(card)
   })
 }
 
-/* ================= ORDER ================= */
+/* ================= ADD ITEM ================= */
 async function addItem(p) {
   if (!selectedTableId) {
-    alert("❌ กรุณาเลือกโต๊ะก่อน")
+    alert("กรุณาเลือกโต๊ะก่อน")
     return
   }
 
+  // ครั้งแรก → สร้าง order + ล็อกโต๊ะ
   if (!currentOrderId) {
-    const { data: order } = await sb
+    const { data: order, error } = await sb
       .from("orders")
       .insert({ table_id: selectedTableId })
       .select()
       .single()
+
+    if (error) {
+      alert("สร้างบิลไม่สำเร็จ")
+      console.error(error)
+      return
+    }
 
     await sb.from("tables")
       .update({
@@ -226,25 +248,37 @@ async function addItem(p) {
   if (sp) price += 10
   if (mixId) price += 10
 
-  await sb.from("order_items").insert({
-    order_id: currentOrderId,
-    product_id: p.id,
-    price,
-    option_special: sp,
-    option_mix: !!mixId,
-    mix_sauce_id: mixId
-  })
+  const { error } = await sb
+    .from("order_items")
+    .insert({
+      order_id: currentOrderId,
+      product_id: p.id,
+      price,
+      option_special: sp,
+      option_mix: !!mixId,
+      mix_sauce_id: mixId
+    })
+
+  if (error) {
+    alert("เพิ่มสินค้าไม่สำเร็จ")
+    console.error(error)
+    return
+  }
 
   loadOrderItems()
 }
 
-/* ================= ORDER ITEMS ================= */
+/* ================= LOAD ORDER ITEMS ================= */
 async function loadOrderItems() {
   if (!currentOrderId) return
 
   const { data } = await sb
     .from("order_items")
-    .select(`price, products(name), mix:mix_sauce_id(name)`)
+    .select(`
+      price,
+      products(name),
+      mix:mix_sauce_id(name)
+    `)
     .eq("order_id", currentOrderId)
 
   let total = 0
@@ -252,40 +286,25 @@ async function loadOrderItems() {
 
   ;(data || []).forEach(i => {
     total += i.price
-    const d = document.createElement("div")
-    d.className = "bg-slate-700 p-2 rounded text-sm"
-    d.textContent =
+    const div = document.createElement("div")
+    div.className = "bg-slate-700 p-2 rounded text-sm"
+    div.textContent =
       i.products.name +
       (i.mix ? ` (ผสม ${i.mix.name})` : "")
-    orderItems.appendChild(d)
+    orderItems.appendChild(div)
   })
 
   totalPrice.textContent = total + " ฿"
 }
 
-/* ================= PAY ================= */
-payBtn.addEventListener("click", async () => {
-  if (!currentOrderId) return
-
-  await sb.from("orders")
-    .update({ status: "paid" })
-    .eq("id", currentOrderId)
-
-  await sb.from("tables")
-    .update({
-      status: "available",
-      current_order_id: null
-    })
-    .eq("id", selectedTableId)
-
-  alert("ชำระเงินเรียบร้อย")
-  location.reload()
-})
-
 /* ================= INIT ================= */
-document.getElementById("btn-noodle").addEventListener("click", () => setCategory('ขนมจีน'))
-document.getElementById("btn-drink").addEventListener("click", () => setCategory('เครื่องดื่ม'))
-document.getElementById("btn-snack").addEventListener("click", () => setCategory('ทานเล่น'))
+const btnNoodle = document.getElementById("btn-noodle")
+const btnDrink  = document.getElementById("btn-drink")
+const btnSnack  = document.getElementById("btn-snack")
+
+btnNoodle.onclick = () => setCategory("ขนมจีน")
+btnDrink.onclick  = () => setCategory("เครื่องดื่ม")
+btnSnack.onclick  = () => setCategory("ทานเล่น")
 
 loadTables()
 loadMenu()
