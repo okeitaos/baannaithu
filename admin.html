@@ -5,10 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>🛠️ Admin Dashboard</title>
 
-<!-- SUPABASE -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<!-- UI -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -18,17 +15,13 @@
 
 <h1 class="text-2xl font-bold text-center">🛠️ Admin Dashboard</h1>
 
-<!-- ================= CONNECT SUPABASE ================= -->
 <script>
+/* ================= SUPABASE ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
-
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log('SUPABASE CONNECTED', db);
-</script>
 
-<!-- Toast -->
-<script>
+/* ================= TOAST ================= */
 const Toast = Swal.mixin({
   toast:true,
   position:'top-end',
@@ -37,6 +30,13 @@ const Toast = Swal.mixin({
   background:'#1e293b',
   color:'#fff'
 });
+
+/* ================= UTIL ================= */
+function thaiRange(d){
+  const s = new Date(d + 'T00:00:00+07:00');
+  const e = new Date(d + 'T23:59:59+07:00');
+  return { start:s.toISOString(), end:e.toISOString() };
+}
 </script>
 
 <!-- ================= CATEGORY ================= -->
@@ -52,24 +52,17 @@ const Toast = Swal.mixin({
 <!-- ================= PRODUCT ================= -->
 <section class="bg-slate-800 p-4 rounded-xl space-y-3">
   <h2 class="font-bold">🍜 สินค้า</h2>
-
   <div class="grid grid-cols-3 gap-2">
     <input id="pName" class="p-2 text-black rounded" placeholder="ชื่อสินค้า">
     <select id="pCategory" class="p-2 text-black rounded"></select>
     <input id="pPrice" type="number" class="p-2 text-black rounded" placeholder="ราคา">
   </div>
-
-  <button onclick="addProduct()" class="bg-emerald-600 px-4 py-2 rounded">
-    ➕ เพิ่มสินค้า
-  </button>
+  <button onclick="addProduct()" class="bg-emerald-600 px-4 py-2 rounded">➕ เพิ่มสินค้า</button>
 
   <table class="w-full text-sm">
     <thead>
       <tr class="border-b border-slate-600">
-        <th>ชื่อ</th>
-        <th>ราคา</th>
-        <th>ขาย</th>
-        <th>ลบ</th>
+        <th>ชื่อ</th><th>ราคา</th><th>ขาย</th><th>ลบ</th>
       </tr>
     </thead>
     <tbody id="productList"></tbody>
@@ -89,57 +82,34 @@ const Toast = Swal.mixin({
 <!-- ================= BILLS ================= -->
 <section class="bg-slate-800 p-4 rounded-xl space-y-3">
   <h2 class="font-bold">🧾 บิลรายวัน</h2>
-
-  <input type="date" id="billDate"
-    class="p-2 text-black rounded"
-    onchange="loadBills()">
-
-  <div class="font-bold">
-    รวม: <span id="dailyTotal" class="text-emerald-400">0</span> บาท
-  </div>
-
-  <button onclick="exportExcel()" class="bg-emerald-600 px-3 py-1 rounded">
-    📤 Export Excel
-  </button>
-
+  <input type="date" id="billDate" class="p-2 text-black rounded" onchange="loadBills()">
+  <div class="font-bold">รวม: <span id="dailyTotal" class="text-emerald-400">0</span> บาท</div>
+  <button onclick="exportExcel()" class="bg-emerald-600 px-3 py-1 rounded">📤 Export Excel</button>
   <div id="billList" class="space-y-2 text-sm"></div>
 </section>
 
 <!-- ================= CHART ================= -->
 <section class="bg-slate-800 p-4 rounded-xl">
-  <h2 class="font-bold mb-2">📊 กราฟยอดขาย</h2>
+  <h2 class="font-bold mb-2">📊 ยอดขายรายชั่วโมง (เวลาไทย)</h2>
   <canvas id="salesChart"></canvas>
 </section>
-<!-- ===== TOP PRODUCT FILTER ===== -->
-<div class="bg-slate-800 p-4 rounded-xl space-y-3">
+
+<section class="bg-slate-800 p-4 rounded-xl space-y-3">
   <h2 class="font-bold">🏆 สินค้าขายดี</h2>
-
-  <div class="flex gap-2 items-center">
-    <label>หมวด:</label>
-    <select id="categoryFilter"
-      class="p-2 text-black rounded"
-      onchange="drawProductChart()">
-      <option value="">ทั้งหมด</option>
-    </select>
-  </div>
-
+  <select id="categoryFilter" class="p-2 text-black rounded" onchange="drawProductChart()">
+    <option value="">ทั้งหมด</option>
+  </select>
   <canvas id="productChart" height="160"></canvas>
-</div>
+</section>
 
-<!-- ================= LOGIC ================= -->
 <script>
-/* ---------- UTIL ---------- */
-function thaiRange(d){
-  const s = new Date(d + 'T00:00:00+07:00');
-  const e = new Date(d + 'T23:59:59+07:00');
-  return { start:s.toISOString(), end:e.toISOString() };
-}
-
 /* ---------- CATEGORY ---------- */
 async function loadCategories(){
   const { data } = await db.from('categories').select('*').order('name');
   categoryList.innerHTML='';
   pCategory.innerHTML='';
+  categoryFilter.innerHTML='<option value="">ทั้งหมด</option>';
+
   data.forEach(c=>{
     categoryList.innerHTML+=`
       <div class="flex justify-between bg-slate-700 p-2 rounded">
@@ -147,24 +117,18 @@ async function loadCategories(){
         <button onclick="deleteCategory('${c.id}','${c.name}')">🗑</button>
       </div>`;
     pCategory.innerHTML+=`<option>${c.name}</option>`;
-  });
-  // เติมหมวดให้กราฟขายดี
-const catSelect = document.getElementById('categoryFilter');
-if(catSelect){
-  catSelect.innerHTML = '<option value="">ทั้งหมด</option>';
-  data.forEach(c=>{
-    catSelect.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+    categoryFilter.innerHTML+=`<option value="${c.name}">${c.name}</option>`;
   });
 }
 
-}
 async function addCategory(){
   if(!catName.value) return;
   await db.from('categories').insert({ name:catName.value });
   catName.value='';
-  Toast.fire({ icon:'success', title:'เพิ่มหมวดแล้ว' });
+  Toast.fire({icon:'success',title:'เพิ่มหมวดแล้ว'});
   loadCategories();
 }
+
 async function deleteCategory(id,name){
   const { data } = await db.from('products').select('id').eq('category',name).limit(1);
   if(data.length){
@@ -181,47 +145,25 @@ async function loadProducts(){
   productList.innerHTML='';
   data.forEach(p=>{
     productList.innerHTML+=`
-      <tr class="border-b border-slate-700">
+      <tr>
         <td>${p.name}</td>
-        <td>
-          <input type="number" value="${p.price}"
-            class="w-20 text-black px-1"
-            onchange="updateProductPrice('${p.id}', this.value)">
-        </td>
-        <td class="text-center">
-          <input type="checkbox" ${p.active?'checked':''}
-            onchange="toggleProductActive('${p.id}', this.checked)">
-        </td>
-        <td class="text-center">
-          <button onclick="deleteProduct('${p.id}','${p.name}')">ลบ</button>
-        </td>
+        <td><input type="number" value="${p.price}" onchange="updateProductPrice('${p.id}',this.value)"></td>
+        <td><input type="checkbox" ${p.active?'checked':''} onchange="toggleProductActive('${p.id}',this.checked)"></td>
+        <td><button onclick="deleteProduct('${p.id}','${p.name}')">ลบ</button></td>
       </tr>`;
   });
 }
+
 async function addProduct(){
   if(!pName.value||!pPrice.value) return;
-  await db.from('products').insert({
-    name:pName.value,
-    category:pCategory.value,
-    price:Number(pPrice.value),
-    active:true
-  });
+  await db.from('products').insert({name:pName.value,category:pCategory.value,price:+pPrice.value,active:true});
   pName.value=pPrice.value='';
   loadProducts();
 }
-async function updateProductPrice(id,price){
-  await db.from('products').update({ price:Number(price) }).eq('id',id);
-}
-async function toggleProductActive(id,active){
-  await db.from('products').update({ active }).eq('id',id);
-}
+async function updateProductPrice(id,price){ await db.from('products').update({price:+price}).eq('id',id); }
+async function toggleProductActive(id,active){ await db.from('products').update({active}).eq('id',id); }
 async function deleteProduct(id,name){
-  const res = await Swal.fire({
-    title:`ลบ "${name}" ?`,
-    icon:'warning',
-    showCancelButton:true,
-    confirmButtonColor:'#dc2626'
-  });
+  const res = await Swal.fire({title:`ลบ ${name}?`,icon:'warning',showCancelButton:true});
   if(!res.isConfirmed) return;
   await db.from('products').delete().eq('id',id);
   loadProducts();
@@ -233,239 +175,86 @@ async function loadTables(){
   tableList.innerHTML='';
   data.forEach(t=>{
     tableList.innerHTML+=`
-      <div class="flex justify-between items-center bg-slate-700 p-2 rounded">
-        <span>${t.name}</span>
-        <div class="flex items-center gap-3">
-          <label class="flex items-center gap-1 text-sm">
-            <input type="checkbox" ${t.active?'checked':''}
-              onchange="toggleTableActive('${t.id}', this.checked)">
-            เปิด
-          </label>
-          <button class="text-red-400"
-            onclick="deleteTable('${t.id}','${t.name}')">🗑</button>
-        </div>
+      <div class="flex justify-between bg-slate-700 p-2 rounded">
+        ${t.name}
+        <input type="checkbox" ${t.active?'checked':''} onchange="toggleTableActive('${t.id}',this.checked)">
       </div>`;
   });
 }
-async function addTable(){
-  if(!tName.value) return;
-  await db.from('tables').insert({ name:tName.value, active:true });
-  tName.value='';
-  loadTables();
-}
-async function toggleTableActive(id,active){
-  await db.from('tables').update({ active }).eq('id',id);
-}
-async function deleteTable(id,name){
-  const res = await Swal.fire({
-    title:`ลบโต๊ะ "${name}" ?`,
-    text:'บิลเก่าจะยังอยู่',
-    icon:'warning',
-    showCancelButton:true,
-    confirmButtonColor:'#dc2626'
-  });
-  if(!res.isConfirmed) return;
-  await db.from('tables').delete().eq('id',id);
-  loadTables();
-}
+async function addTable(){ if(!tName.value) return; await db.from('tables').insert({name:tName.value,active:true}); tName.value=''; loadTables(); }
+async function toggleTableActive(id,active){ await db.from('tables').update({active}).eq('id',id); }
 
 /* ---------- BILLS ---------- */
 async function loadBills(){
   const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
 
-  const { data:orders } = await db
-    .from('orders')
-    .select(`
-      id,total,created_at,
-      order_items!order_items_order_id_fkey(product_name,qty,price)
-    `)
-    .gte('created_at',start)
-    .lte('created_at',end)
-    .order('created_at',{ascending:false});
+  const { data:orders } = await db.from('orders')
+    .select(`id,total,created_at,order_items!order_items_order_id_fkey(product_name,qty,price)`)
+    .gte('created_at',start).lte('created_at',end);
 
-  billList.innerHTML='';
-  let sum=0;
+  billList.innerHTML=''; let sum=0;
   orders.forEach(o=>{
     sum+=o.total;
-    billList.innerHTML+=`
-      <div class="border p-2 rounded">
-        <b>${o.total} บาท</b>
-        ${o.order_items.map(i=>`<div>- ${i.product_name} × ${i.qty}</div>`).join('')}
-      </div>`;
+    billList.innerHTML+=`<div><b>${o.total}</b>${o.order_items.map(i=>`<div>- ${i.product_name} × ${i.qty}</div>`).join('')}</div>`;
   });
   dailyTotal.innerText=sum;
-  drawChart(orders);
+  drawTimeChart(orders);
+  drawProductChart();
 }
 
-/* ---------- EXPORT (UTF-8 BOM FIX) ---------- */
+/* ---------- EXPORT ---------- */
 async function exportExcel(){
-  const d = billDate.value;
-  if(!d) return;
+  const d=billDate.value; if(!d) return;
+  const {start,end}=thaiRange(d);
 
-  const { start, end } = thaiRange(d);
+  const { data:orders } = await db.from('orders')
+    .select(`order_items!order_items_order_id_fkey(product_name,qty,price)`)
+    .gte('created_at',start).lte('created_at',end);
 
-  const { data: orders, error } = await db
-    .from('orders')
-    .select(`
-      id,
-      created_at,
-      order_items!order_items_order_id_fkey (
-        product_name,
-        qty,
-        price
-      )
-    `)
-    .gte('created_at', start)
-    .lte('created_at', end);
+  let rows=[['สินค้า','จำนวน','รวม']];
+  orders.forEach(o=>o.order_items.forEach(i=>rows.push([i.product_name,i.qty,i.qty*i.price])));
 
-  if(error){
-    console.error(error);
-    Swal.fire('Export ไม่สำเร็จ', error.message, 'error');
-    return;
-  }
-
-  if(!orders || orders.length === 0){
-    Swal.fire('ไม่มีข้อมูล', 'ไม่พบบิลในวันที่เลือก', 'info');
-    return;
-  }
-
-  // schema ตายตัว
-  let rows = [
-    ['สินค้า', 'จำนวน', 'รวม']
-  ];
-
-  orders.forEach(o => {
-    if(!o.order_items) return;
-    o.order_items.forEach(i => {
-      rows.push([
-        i.product_name,
-        i.qty,
-        i.qty * i.price
-      ]);
-    });
-  });
-
-  const csvContent =
-    '\ufeff' +
-    rows
-      .map(r =>
-        r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
-      )
-      .join('\n');
-
-  const blob = new Blob(
-    [csvContent],
-    { type:'text/csv;charset=utf-8;' }
-  );
-
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `ยอดขาย_${d}.csv`;
-  a.click();
+  const csv='\ufeff'+rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=`ยอดขาย_${d}.csv`; a.click();
 }
 
-
-
-/* ---------- CHART ---------- */
-function drawChart(orders){
-  const hours = [...Array(24).keys()];
-  const totals = Array(24).fill(0);
-
+/* ---------- CHART TIME ---------- */
+function drawTimeChart(orders){
+  const totals=Array(24).fill(0);
   orders.forEach(o=>{
-    const h = Number(
-      new Date(o.created_at)
-        .toLocaleString('th-TH',{
-          timeZone:'Asia/Bangkok',
-          hour:'2-digit',
-          hour12:false
-        })
-    );
-    totals[h] += o.total;
+    const h=Number(new Date(o.created_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',hour12:false}));
+    totals[h]+=o.total;
   });
-
-  if(window.salesChart && typeof window.salesChart.destroy==='function'){
-    window.salesChart.destroy();
-  }
-
-  window.salesChart = new Chart(
-    document.getElementById('salesChart'),
-    {
-      type:'bar',
-      data:{
-        labels: hours.map(h=>`${h}:00`),
-        datasets:[{
-          label:'ยอดขาย (บาท)',
-          data: totals,
-          backgroundColor:'#22c55e'
-        }]
-      },
-      options:{
-        plugins:{ legend:{ display:false } }
-      }
-    }
-  );
+  if(window.salesChart) window.salesChart.destroy();
+  window.salesChart=new Chart(salesChart,{type:'bar',data:{labels:[...Array(24).keys()].map(h=>`${h}:00`),datasets:[{data:totals,label:'บาท'}]}});
 }
-  async function drawProductChart(){
-  const d = billDate.value;
-  if(!d) return;
 
-  const { start, end } = thaiRange(d);
-  const category = document.getElementById('categoryFilter')?.value || '';
+/* ---------- CHART PRODUCT ---------- */
+async function drawProductChart(){
+  const d=billDate.value; if(!d) return;
+  const {start,end}=thaiRange(d);
+  const category=categoryFilter.value;
 
-  const { data: orders, error } = await db
-    .from('orders')
-    .select(`
-      order_items!order_items_order_id_fkey(
-        product_name,
-        qty
-      )
-    `)
-    .gte('created_at', start)
-    .lte('created_at', end);
+  const { data:products } = await db.from('products').select('name,category');
+  const mapCat={}; products.forEach(p=>mapCat[p.name]=p.category);
 
-  if(error){
-    console.error(error);
-    return;
-  }
+  const { data:orders } = await db.from('orders')
+    .select(`order_items!order_items_order_id_fkey(product_name,qty)`)
+    .gte('created_at',start).lte('created_at',end);
 
-  const map = {};
+  const map={};
+  orders.forEach(o=>o.order_items.forEach(i=>{
+    if(category && mapCat[i.product_name]!==category) return;
+    map[i.product_name]=(map[i.product_name]||0)+i.qty;
+  }));
 
-  orders.forEach(o=>{
-    o.order_items?.forEach(i=>{
-      // กรองหมวด (ถ้าเลือก)
-      if(category && !i.product_name.includes(category)) return;
-
-      map[i.product_name] =
-        (map[i.product_name] || 0) + i.qty;
-    });
-  });
-
-  const labels = Object.keys(map);
-  const values = Object.values(map);
-
-  if(window.productChart && typeof window.productChart.destroy==='function'){
-    window.productChart.destroy();
-  }
-
-  window.productChart = new Chart(
-    document.getElementById('productChart'),
-    {
-      type:'bar',
-      data:{
-        labels,
-        datasets:[{
-          label:'จำนวนที่ขายได้',
-          data: values,
-          backgroundColor:'#38bdf8'
-        }]
-      },
-      options:{
-        indexAxis:'y',
-        plugins:{ legend:{ display:false } }
-      }
-    }
-  );
+  const labels=Object.keys(map), values=Object.values(map);
+  if(window.productChart) window.productChart.destroy();
+  if(!labels.length) return;
+  window.productChart=new Chart(productChart,{type:'bar',data:{labels,datasets:[{data:values,label:'จำนวน',backgroundColor:'#38bdf8'}]},options:{indexAxis:'y'}});
 }
 
 /* ---------- INIT ---------- */
