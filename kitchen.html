@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>👨‍🍳 Kitchen</title>
+<title>👨‍🍳 Kitchen (By Bill)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -16,9 +16,9 @@
 
 <audio id="dingSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
 
-<div class="max-w-6xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว</h1>
-  <div id="orderList" class="space-y-4"></div>
+<div class="max-w-7xl mx-auto">
+  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว (แสดงเป็นบิล)</h1>
+  <div id="billList" class="grid md:grid-cols-2 gap-4"></div>
 </div>
 
 <script>
@@ -28,13 +28,13 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 /* ================= STATE ================= */
-const orderList = document.getElementById("orderList")
+const billList = document.getElementById("billList")
 const ding = document.getElementById("dingSound")
 
-let knownItemIds = new Set()
 let productMap = {}
 let tableMap = {}
 let orderTableMap = {}
+let knownOrderIds = new Set()
 
 /* ================= LOAD MASTER DATA ================= */
 async function loadProducts() {
@@ -54,8 +54,8 @@ async function loadOrdersMap() {
   })
 }
 
-/* ================= LOAD ORDER ITEMS ================= */
-async function loadOrders(playSound = false) {
+/* ================= LOAD BILLS ================= */
+async function loadBills(playSound = false) {
   const { data, error } = await sb
     .from("order_items")
     .select(`
@@ -72,56 +72,67 @@ async function loadOrders(playSound = false) {
     .order("created_at", { ascending: true })
 
   if (error) {
-    console.error("loadOrders error", error)
+    console.error(error)
     return
   }
 
   const rows = data || []
-  orderList.innerHTML = ""
+  billList.innerHTML = ""
+
+  // group by order_id
+  const bills = {}
+  rows.forEach(item => {
+    if (!bills[item.order_id]) bills[item.order_id] = []
+    bills[item.order_id].push(item)
+  })
+
   let hasNew = false
 
-  rows.forEach(item => {
-    if (!knownItemIds.has(item.id)) {
-      knownItemIds.add(item.id)
+  Object.entries(bills).forEach(([orderId, items]) => {
+    if (!knownOrderIds.has(orderId)) {
+      knownOrderIds.add(orderId)
       hasNew = true
     }
 
-    const productName = productMap[item.product_id] || "ไม่ทราบชื่อ"
-    const mixName =
-      item.option_mix && item.mix_sauce_id
-        ? productMap[item.mix_sauce_id]
-        : ""
-
-    const tableNo = orderTableMap[item.order_id] || "-"
-
+    const tableNo = orderTableMap[orderId] || "-"
     const card = document.createElement("div")
     card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
 
-    card.innerHTML = `
-      <div class="flex justify-between items-center mb-2">
-        <div class="font-bold text-lg">
-          🍽️ โต๊ะ ${tableNo}
+    let itemsHTML = items.map(it => {
+      const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
+      const mixName =
+        it.option_mix && it.mix_sauce_id
+          ? productMap[it.mix_sauce_id]
+          : ""
+
+      return `
+        <div class="flex justify-between border-b border-slate-700 py-1">
+          <div>
+            ${name}
+            ${it.option_special ? "(พิเศษ)" : ""}
+            ${mixName ? `(ผสม ${mixName})` : ""}
+          </div>
+          <div class="font-bold">x ${it.qty}</div>
         </div>
-        <button class="doneBtn bg-green-600 px-4 py-1 rounded">
-          ✅ ทำเสร็จแล้ว
+      `
+    }).join("")
+
+    card.innerHTML = `
+      <div class="flex justify-between items-center mb-3">
+        <div class="text-lg font-bold">🍽️ โต๊ะ ${tableNo}</div>
+        <button class="doneBill bg-green-600 px-4 py-1 rounded">
+          ✅ เสร็จทั้งบิล
         </button>
       </div>
 
-      <div class="text-xl font-bold">
-        ${productName}
-        ${item.option_special ? "(พิเศษ)" : ""}
-        ${mixName ? `(ผสม ${mixName})` : ""}
-      </div>
-
-      <div class="text-sm text-gray-300 mt-1">
-        จำนวน: <b>${item.qty}</b> ที่
+      <div class="space-y-1">
+        ${itemsHTML}
       </div>
     `
 
-    card.querySelector(".doneBtn").onclick = async () => {
+    card.querySelector(".doneBill").onclick = async () => {
       const confirm = await Swal.fire({
-        title: "ยืนยันทำเสร็จแล้ว?",
-        text: `${productName} x ${item.qty}`,
+        title: `ยืนยันเสร็จทั้งบิล โต๊ะ ${tableNo}`,
         icon: "question",
         showCancelButton: true,
         confirmButtonText: "เสร็จแล้ว",
@@ -130,24 +141,25 @@ async function loadOrders(playSound = false) {
 
       if (!confirm.isConfirmed) return
 
+      // update ทุก item ใน order นี้
       await sb
         .from("order_items")
         .update({ status: "done" })
-        .eq("id", item.id)
+        .eq("order_id", orderId)
 
       Swal.fire({
         toast: true,
         position: "top-end",
         icon: "success",
-        title: "รับทราบแล้ว",
+        title: "บิลนี้ทำเสร็จแล้ว",
         showConfirmButton: false,
         timer: 1200
       })
 
-      loadOrders()
+      loadBills()
     }
 
-    orderList.appendChild(card)
+    billList.appendChild(card)
   })
 
   if (playSound && hasNew) {
@@ -157,14 +169,14 @@ async function loadOrders(playSound = false) {
 }
 
 /* ================= REALTIME ================= */
-const channel = sb.channel("kitchen-realtime")
+const channel = sb.channel("kitchen-bill")
 
 channel.on(
   "postgres_changes",
   { event: "INSERT", schema: "public", table: "order_items" },
   payload => {
     if (payload.new.status === "pending") {
-      loadOrders(true)
+      loadBills(true)
     }
   }
 )
@@ -172,7 +184,7 @@ channel.on(
 channel.on(
   "postgres_changes",
   { event: "UPDATE", schema: "public", table: "order_items" },
-  () => loadOrders()
+  () => loadBills()
 )
 
 channel.subscribe()
@@ -182,7 +194,7 @@ channel.subscribe()
   await loadProducts()
   await loadTables()
   await loadOrdersMap()
-  loadOrders()
+  loadBills()
 })()
 </script>
 
