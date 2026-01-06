@@ -13,41 +13,29 @@
 
 <div class="grid grid-cols-12 gap-4 max-w-7xl mx-auto">
 
-  <!-- ================= TABLES ================= -->
+  <!-- TABLES -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">🪑 โต๊ะว่าง</h2>
     <div id="tableList" class="grid grid-cols-2 gap-2"></div>
   </div>
 
-  <!-- ================= MENU ================= -->
+  <!-- MENU -->
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
     <!-- CATEGORY BUTTONS -->
     <div class="flex gap-2 mb-3">
-      <button id="btn-noodle" onclick="setCategory('ขนมจีน')"
-        class="px-3 py-1 rounded bg-orange-600">
-        🍜 ขนมจีน
-      </button>
-      <button id="btn-drink" onclick="setCategory('เครื่องดื่ม')"
-        class="px-3 py-1 rounded bg-slate-600">
-        🥤 เครื่องดื่ม
-      </button>
-      <button id="btn-snack" onclick="setCategory('ทานเล่น')"
-        class="px-3 py-1 rounded bg-slate-600">
-        🍢 ทานเล่น
-      </button>
+      <button id="btn-noodle" class="px-3 py-1 rounded bg-orange-600">🍜 ขนมจีน</button>
+      <button id="btn-drink" class="px-3 py-1 rounded bg-slate-600">🥤 เครื่องดื่ม</button>
+      <button id="btn-snack" class="px-3 py-1 rounded bg-slate-600">🍢 ทานเล่น</button>
     </div>
 
     <div id="menuList" class="space-y-2"></div>
   </div>
 
-  <!-- ================= ORDER ================= -->
+  <!-- ORDER -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">
-      🧾 โต๊ะ <span id="currentTable">-</span>
-    </h2>
-
+    <h2 class="font-bold mb-3">🧾 โต๊ะ <span id="currentTable">-</span></h2>
     <div id="orderItems" class="space-y-2 mb-3"></div>
 
     <div class="border-t pt-3">
@@ -56,8 +44,7 @@
         <span id="totalPrice">0 ฿</span>
       </div>
 
-      <button onclick="payOrder()"
-        class="w-full mt-3 bg-green-600 py-2 rounded">
+      <button id="payBtn" class="w-full mt-3 bg-green-600 py-2 rounded">
         💰 คิดเงิน
       </button>
     </div>
@@ -67,38 +54,31 @@
 
 <script>
 /* ================= CONFIG ================= */
+// ❗ ใส่ค่าจริงจาก Supabase
 const sb = supabase.createClient(
   "SUPABASE_URL",
   "SUPABASE_ANON_KEY"
 )
 
-const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
-
+/* ================= STATE ================= */
 let currentCategory = 'ขนมจีน'
 let currentOrderId = null
 let currentTableId = null
 let noodleMenus = []
 
+const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
+
 /* ================= CATEGORY ================= */
 function setCategory(cat) {
   currentCategory = cat
 
-  const btnNoodle = document.getElementById("btn-noodle")
-  const btnDrink  = document.getElementById("btn-drink")
-  const btnSnack  = document.getElementById("btn-snack")
+  document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-slate-600"
+  document.getElementById("btn-drink").className  = "px-3 py-1 rounded bg-slate-600"
+  document.getElementById("btn-snack").className  = "px-3 py-1 rounded bg-slate-600"
 
-  if (btnNoodle) btnNoodle.className = "px-3 py-1 rounded bg-slate-600"
-  if (btnDrink)  btnDrink.className  = "px-3 py-1 rounded bg-slate-600"
-  if (btnSnack)  btnSnack.className  = "px-3 py-1 rounded bg-slate-600"
-
-  if (cat === 'ขนมจีน' && btnNoodle)
-    btnNoodle.className = "px-3 py-1 rounded bg-orange-600"
-
-  if (cat === 'เครื่องดื่ม' && btnDrink)
-    btnDrink.className = "px-3 py-1 rounded bg-blue-600"
-
-  if (cat === 'ทานเล่น' && btnSnack)
-    btnSnack.className = "px-3 py-1 rounded bg-green-600"
+  if (cat === 'ขนมจีน') document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-orange-600"
+  if (cat === 'เครื่องดื่ม') document.getElementById("btn-drink").className = "px-3 py-1 rounded bg-blue-600"
+  if (cat === 'ทานเล่น') document.getElementById("btn-snack").className = "px-3 py-1 rounded bg-green-600"
 
   loadMenu()
 }
@@ -146,9 +126,7 @@ function getAllowedMixOptions(mainName) {
     return noodleMenus.filter(n => n.name !== mainName)
   }
   return noodleMenus.filter(
-    n =>
-      !restrictedMixTargets.includes(n.name) &&
-      n.name !== mainName
+    n => !restrictedMixTargets.includes(n.name) && n.name !== mainName
   )
 }
 
@@ -176,8 +154,7 @@ async function loadMenu() {
     if (p.category === 'ขนมจีน') {
       options += `
         <label class="block text-sm">
-          <input type="checkbox" id="sp_${p.id}">
-          พิเศษ (+10)
+          <input type="checkbox" id="sp_${p.id}"> พิเศษ (+10)
         </label>
       `
 
@@ -188,9 +165,7 @@ async function loadMenu() {
             ผสม (+10)
             <select id="mix_${p.id}" class="text-black ml-1">
               <option value="">-- ไม่ผสม --</option>
-              ${mixes.map(m =>
-                `<option value="${m.id}">${m.name}</option>`
-              ).join("")}
+              ${mixes.map(m => `<option value="${m.id}">${m.name}</option>`).join("")}
             </select>
           </label>
         `
@@ -199,7 +174,6 @@ async function loadMenu() {
 
     const div = document.createElement("div")
     div.className = "bg-slate-700 p-3 rounded"
-
     div.innerHTML = `
       <div class="flex justify-between">
         <div>
@@ -251,13 +225,7 @@ async function loadOrderItems() {
 
   const { data } = await sb
     .from("order_items")
-    .select(`
-      price,
-      option_special,
-      option_mix,
-      products(name),
-      mix:mix_sauce_id(name)
-    `)
+    .select(`price, option_special, option_mix, products(name), mix:mix_sauce_id(name)`)
     .eq("order_id", currentOrderId)
 
   let total = 0
@@ -282,13 +250,12 @@ async function loadOrderItems() {
 }
 
 /* ================= PAY ================= */
+document.getElementById("payBtn").onclick = payOrder
+
 async function payOrder() {
   if (!currentOrderId) return
 
-  await sb.from("orders")
-    .update({ status: "paid" })
-    .eq("id", currentOrderId)
-
+  await sb.from("orders").update({ status: "paid" }).eq("id", currentOrderId)
   await sb.from("tables")
     .update({ status: "available", current_order_id: null })
     .eq("id", currentTableId)
@@ -299,17 +266,15 @@ async function payOrder() {
 
 /* ================= REALTIME ================= */
 sb.channel("pos")
-  .on("postgres_changes",
-    { event: "*", schema: "public", table: "order_items" },
-    loadOrderItems
-  )
-  .on("postgres_changes",
-    { event: "*", schema: "public", table: "tables" },
-    loadTables
-  )
+  .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, loadOrderItems)
+  .on("postgres_changes", { event: "*", schema: "public", table: "tables" }, loadTables)
   .subscribe()
 
 /* ================= INIT ================= */
+document.getElementById("btn-noodle").onclick = () => setCategory('ขนมจีน')
+document.getElementById("btn-drink").onclick  = () => setCategory('เครื่องดื่ม')
+document.getElementById("btn-snack").onclick  = () => setCategory('ทานเล่น')
+
 loadTables()
 loadMenu()
 </script>
