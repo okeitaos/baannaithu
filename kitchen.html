@@ -55,71 +55,101 @@ async function loadOrdersMap() {
   })
 }
 
-/* ================= LOAD BILLS ================= */
-async function loadBills(playSound = false) {
-  const { data, error } = await sb
-    .from("order_items")
-    .select(`
-      id,
-      order_id,
-      product_id,
-      mix_sauce_id,
-      qty,
-      option_special,
-      option_mix,
-      status
-    `)
-    .eq("status", "pending")
-    .order("created_at", { ascending: true })
+/* ================= ACTIONS ================= */
+async function cancelItem(item) {
+  const confirm = await Swal.fire({
+    title: "ยกเลิกรายการนี้?",
+    text: "ของหมด / ไม่สามารถเสิร์ฟได้",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "ยกเลิก",
+    cancelButtonText: "ไม่"
+  })
+  if (!confirm.isConfirmed) return
 
-  if (error) {
-    console.error(error)
+  await sb.from("order_items")
+    .update({ status: "cancelled" })
+    .eq("id", item.id)
+
+  loadBills()
+}
+
+async function splitItem(item) {
+  if (item.qty <= 1) {
+    Swal.fire("ไม่สามารถแบ่งได้", "จำนวน = 1", "info")
     return
   }
 
-  const rows = data || []
-  billList.innerHTML = ""
+  const { value: servedQty } = await Swal.fire({
+    title: "เสิร์ฟได้กี่ที่?",
+    input: "number",
+    inputAttributes: { min: 1, max: item.qty - 1 },
+    inputValue: 1,
+    showCancelButton: true
+  })
 
+  if (!servedQty) return
+
+  const cancelledQty = item.qty - servedQty
+
+  // 1) update ตัวที่เสิร์ฟ
+  await sb.from("order_items")
+    .update({ qty: servedQty, status: "done" })
+    .eq("id", item.id)
+
+  // 2) insert ตัวที่ยกเลิก
+  await sb.from("order_items").insert({
+    order_id: item.order_id,
+    product_id: item.product_id,
+    mix_sauce_id: item.mix_sauce_id,
+    qty: cancelledQty,
+    option_special: item.option_special,
+    option_mix: item.option_mix,
+    status: "cancelled"
+  })
+
+  loadBills()
+}
+
+/* ================= LOAD BILLS ================= */
+async function loadBills(playSound = false) {
+  const { data } = await sb
+    .from("order_items")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+
+  billList.innerHTML = ""
   const bills = {}
-  rows.forEach(item => {
+
+  ;(data || []).forEach(item => {
     if (!bills[item.order_id]) bills[item.order_id] = []
     bills[item.order_id].push(item)
   })
 
-  let hasNew = false
-
   Object.entries(bills).forEach(([orderId, items]) => {
-    if (!knownOrderIds.has(orderId)) {
-      knownOrderIds.add(orderId)
-      hasNew = true
-    }
-
     const tableNo = orderTableMap[orderId] || "-"
     const card = document.createElement("div")
     card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
 
     const itemsHTML = items.map(it => {
-      const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
-      const mixName =
-        it.option_mix && it.mix_sauce_id
-          ? productMap[it.mix_sauce_id]
-          : ""
-
+      const name = productMap[it.product_id] || "-"
       return `
-        <div class="flex justify-between border-b border-slate-700 py-1">
-          <div>
-            ${name}
-            ${it.option_special ? "(พิเศษ)" : ""}
-            ${mixName ? `(ผสม ${mixName})` : ""}
+        <div class="border-b border-slate-700 py-2">
+          <div class="flex justify-between">
+            <div>${name} x ${it.qty}</div>
+            <div class="flex gap-2">
+              <button class="bg-red-600 px-2 rounded cancel">❌</button>
+              <button class="bg-yellow-500 px-2 rounded split">➗</button>
+            </div>
           </div>
-          <div class="font-bold">x ${it.qty}</div>
         </div>
       `
     }).join("")
 
     card.innerHTML = `
-      <div class="flex justify-between items-center mb-3">
-        <div class="text-lg font-bold">🍽️ โต๊ะ ${tableNo}</div>
+      <div class="flex justify-between mb-3">
+        <div class="font-bold text-lg">🍽️ โต๊ะ ${tableNo}</div>
         <button class="doneBill bg-green-600 px-4 py-1 rounded">
           ✅ เสร็จทั้งบิล
         </button>
@@ -128,53 +158,31 @@ async function loadBills(playSound = false) {
     `
 
     card.querySelector(".doneBill").onclick = async () => {
-      const confirm = await Swal.fire({
-        title: `ยืนยันเสร็จทั้งบิล โต๊ะ ${tableNo}`,
-        icon: "question",
-        showCancelButton: true,
-        confirmButtonText: "เสร็จแล้ว",
-        cancelButtonText: "ยัง"
-      })
-
-      if (!confirm.isConfirmed) return
-
-      await sb
-        .from("order_items")
+      await sb.from("order_items")
         .update({ status: "done" })
         .eq("order_id", orderId)
-
       loadBills()
     }
 
+    card.querySelectorAll(".cancel").forEach((btn, i) =>
+      btn.onclick = () => cancelItem(items[i])
+    )
+
+    card.querySelectorAll(".split").forEach((btn, i) =>
+      btn.onclick = () => splitItem(items[i])
+    )
+
     billList.appendChild(card)
   })
-
-  if (playSound && hasNew) {
-    ding.currentTime = 0
-    ding.play()
-  }
 }
 
 /* ================= REALTIME ================= */
 const channel = sb.channel("kitchen-bill")
-
 channel.on(
   "postgres_changes",
-  { event: "INSERT", schema: "public", table: "order_items" },
-  async payload => {
-    if (payload.new.status === "pending") {
-      await loadOrdersMap()   // ⭐ สำคัญ
-      loadBills(true)
-    }
-  }
+  { event: "*", schema: "public", table: "order_items" },
+  () => loadBills(true)
 )
-
-channel.on(
-  "postgres_changes",
-  { event: "UPDATE", schema: "public", table: "order_items" },
-  () => loadBills()
-)
-
 channel.subscribe()
 
 /* ================= INIT ================= */
