@@ -25,15 +25,15 @@
 
     <!-- CATEGORY BUTTONS -->
     <div class="flex gap-2 mb-3">
-      <button onclick="setCategory('ขนมจีน')" id="btn-ขนมจีน"
+      <button id="btn-noodle" onclick="setCategory('ขนมจีน')"
         class="px-3 py-1 rounded bg-orange-600">
         🍜 ขนมจีน
       </button>
-      <button onclick="setCategory('เครื่องดื่ม')" id="btn-เครื่องดื่ม"
+      <button id="btn-drink" onclick="setCategory('เครื่องดื่ม')"
         class="px-3 py-1 rounded bg-slate-600">
         🥤 เครื่องดื่ม
       </button>
-      <button onclick="setCategory('ทานเล่น')" id="btn-ทานเล่น"
+      <button id="btn-snack" onclick="setCategory('ทานเล่น')"
         class="px-3 py-1 rounded bg-slate-600">
         🍢 ทานเล่น
       </button>
@@ -68,8 +68,8 @@
 <script>
 /* ================= CONFIG ================= */
 const sb = supabase.createClient(
-  "https://nvsptbbvxjulrpdebrhn.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY"
 )
 
 const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
@@ -83,13 +83,22 @@ let noodleMenus = []
 function setCategory(cat) {
   currentCategory = cat
 
-  ['ขนมจีน','เครื่องดื่ม','ทานเล่น'].forEach(c => {
-    document.getElementById(`btn-${c}`)
-      .className = 'px-3 py-1 rounded bg-slate-600'
-  })
+  const btnNoodle = document.getElementById("btn-noodle")
+  const btnDrink  = document.getElementById("btn-drink")
+  const btnSnack  = document.getElementById("btn-snack")
 
-  document.getElementById(`btn-${cat}`)
-    .className = 'px-3 py-1 rounded bg-orange-600'
+  if (btnNoodle) btnNoodle.className = "px-3 py-1 rounded bg-slate-600"
+  if (btnDrink)  btnDrink.className  = "px-3 py-1 rounded bg-slate-600"
+  if (btnSnack)  btnSnack.className  = "px-3 py-1 rounded bg-slate-600"
+
+  if (cat === 'ขนมจีน' && btnNoodle)
+    btnNoodle.className = "px-3 py-1 rounded bg-orange-600"
+
+  if (cat === 'เครื่องดื่ม' && btnDrink)
+    btnDrink.className = "px-3 py-1 rounded bg-blue-600"
+
+  if (cat === 'ทานเล่น' && btnSnack)
+    btnSnack.className = "px-3 py-1 rounded bg-green-600"
 
   loadMenu()
 }
@@ -120,10 +129,7 @@ async function openTable(t) {
     .single()
 
   await sb.from("tables")
-    .update({
-      status: "occupied",
-      current_order_id: order.id
-    })
+    .update({ status: "occupied", current_order_id: order.id })
     .eq("id", t.id)
 
   currentOrderId = order.id
@@ -136,15 +142,9 @@ async function openTable(t) {
 
 /* ================= MIX RULE ================= */
 function getAllowedMixOptions(mainName) {
-
-  // เมนูหลัก = แกงปู / น้ำชุบหยำ
   if (restrictedMixTargets.includes(mainName)) {
-    return noodleMenus.filter(
-      n => n.name !== mainName
-    )
+    return noodleMenus.filter(n => n.name !== mainName)
   }
-
-  // เมนูอื่น
   return noodleMenus.filter(
     n =>
       !restrictedMixTargets.includes(n.name) &&
@@ -154,8 +154,6 @@ function getAllowedMixOptions(mainName) {
 
 /* ================= MENU ================= */
 async function loadMenu() {
-
-  // โหลดเมนูตามหมวด
   const { data } = await sb
     .from("products")
     .select("*")
@@ -163,7 +161,6 @@ async function loadMenu() {
     .eq("category", currentCategory)
     .order("price")
 
-  // โหลดขนมจีนทั้งหมดไว้ใช้ผสม
   const { data: noodles } = await sb
     .from("products")
     .select("*")
@@ -174,7 +171,6 @@ async function loadMenu() {
   menuList.innerHTML = ""
 
   data.forEach(p => {
-
     let options = ""
 
     if (p.category === 'ขนมจีน') {
@@ -225,27 +221,23 @@ async function loadMenu() {
 async function addItem(id, base, name) {
   if (!currentOrderId) return alert("เลือกโต๊ะก่อน")
 
-  const special =
-    document.getElementById("sp_" + id)?.checked || false
+  const sp = document.getElementById("sp_" + id)?.checked || false
+  const mixId = document.getElementById("mix_" + id)?.value || null
 
-  const mixSelect = document.getElementById("mix_" + id)
-  const mixId = mixSelect?.value || null
-
-  // 🔒 ห้ามผสมกับตัวเอง
   if (mixId && mixId === id) {
     alert("❌ ไม่สามารถผสมกับตัวเองได้")
     return
   }
 
   let price = base
-  if (special) price += 10
+  if (sp) price += 10
   if (mixId) price += 10
 
   await sb.from("order_items").insert({
     order_id: currentOrderId,
     product_id: id,
     price,
-    option_special: special,
+    option_special: sp,
     option_mix: !!mixId,
     mix_sauce_id: mixId
   })
@@ -298,10 +290,7 @@ async function payOrder() {
     .eq("id", currentOrderId)
 
   await sb.from("tables")
-    .update({
-      status: "available",
-      current_order_id: null
-    })
+    .update({ status: "available", current_order_id: null })
     .eq("id", currentTableId)
 
   alert("ชำระเงินเรียบร้อย")
