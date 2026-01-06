@@ -40,11 +40,18 @@
 
     <div id="orderItems" class="space-y-2 mb-4"></div>
 
-    <div class="border-t pt-3">
+    <div class="border-t pt-3 space-y-2">
       <div class="flex justify-between font-bold text-lg">
         <span>รวม</span>
         <span id="totalPrice">0 ฿</span>
       </div>
+
+      <!-- ปุ่มส่งออร์เดอร์ -->
+      <button id="sendOrderBtn"
+        class="w-full bg-green-600 py-2 rounded disabled:opacity-40"
+        disabled>
+        🟢 ส่งออร์เดอร์เข้าครัว
+      </button>
     </div>
   </div>
 
@@ -91,7 +98,6 @@ async function loadTables() {
 
     btn.className = cls
     btn.textContent = "โต๊ะ " + t.table_no
-
     btn.onclick = () => selectTable(t)
 
     tableList.appendChild(btn)
@@ -100,9 +106,8 @@ async function loadTables() {
 
 /* ================= SELECT TABLE ================= */
 function selectTable(t) {
-  // ถ้ามี order แล้ว ห้ามเปลี่ยนโต๊ะ
   if (currentOrderId && selectedTableId !== t.id) {
-    alert("❌ โต๊ะนี้กำลังใช้งาน ต้องจ่ายเงินก่อน")
+    alert("❌ โต๊ะนี้มีออร์เดอร์แล้ว ต้องจ่ายเงินก่อน")
     return
   }
 
@@ -117,6 +122,7 @@ function selectTable(t) {
     currentOrderId = null
     orderItems.innerHTML = ""
     totalPrice.textContent = "0 ฿"
+    sendOrderBtn.disabled = true
   }
 
   loadTables()
@@ -167,7 +173,7 @@ async function loadMenu() {
 
   ;(products || []).forEach(p => {
     const card = document.createElement("div")
-    card.className = "bg-slate-700 p-3 rounded relative"
+    card.className = "bg-slate-700 p-3 rounded"
 
     let options = ""
     if (p.category === "ขนมจีน") {
@@ -196,27 +202,27 @@ async function loadMenu() {
           <div class="font-bold">${p.name}</div>
           <div class="text-sm">${p.price} บาท</div>
         </div>
-        <button class="add-btn bg-blue-600 px-4 py-2 rounded z-10 relative">
+        <button class="add-btn bg-blue-600 px-4 py-2 rounded">
           เพิ่ม
         </button>
       </div>
       ${options}
     `
 
-    card.querySelector(".add-btn").onclick = () => addItem(p)
+    card.querySelector(".add-btn").onclick = () => addItemDraft(p)
 
     menuList.appendChild(card)
   })
 }
 
-/* ================= ADD ITEM ================= */
-async function addItem(p) {
+/* ================= ADD ITEM (DRAFT) ================= */
+async function addItemDraft(p) {
   if (!selectedTableId) {
     alert("กรุณาเลือกโต๊ะก่อน")
     return
   }
 
-  // ครั้งแรก → สร้าง order + ล็อกโต๊ะ
+  // ถ้ายังไม่มี order ให้สร้างก่อน แต่ยังไม่ lock โต๊ะ
   if (!currentOrderId) {
     const { data: order, error } = await sb
       .from("orders")
@@ -230,15 +236,7 @@ async function addItem(p) {
       return
     }
 
-    await sb.from("tables")
-      .update({
-        status: "occupied",
-        current_order_id: order.id
-      })
-      .eq("id", selectedTableId)
-
     currentOrderId = order.id
-    loadTables()
   }
 
   const sp = document.getElementById("sp_" + p.id)?.checked || false
@@ -256,7 +254,8 @@ async function addItem(p) {
       price,
       option_special: sp,
       option_mix: !!mixId,
-      mix_sauce_id: mixId
+      mix_sauce_id: mixId,
+      status: "draft"
     })
 
   if (error) {
@@ -275,32 +274,84 @@ async function loadOrderItems() {
   const { data } = await sb
     .from("order_items")
     .select(`
+      id,
       price,
+      status,
       products(name),
       mix:mix_sauce_id(name)
     `)
     .eq("order_id", currentOrderId)
+    .order("created_at")
 
   let total = 0
   orderItems.innerHTML = ""
 
+  let hasDraft = false
+
   ;(data || []).forEach(i => {
     total += i.price
+    if (i.status === "draft") hasDraft = true
+
     const div = document.createElement("div")
-    div.className = "bg-slate-700 p-2 rounded text-sm"
-    div.textContent =
-      i.products.name +
-      (i.mix ? ` (ผสม ${i.mix.name})` : "")
+    div.className = "bg-slate-700 p-2 rounded text-sm flex justify-between items-center"
+
+    div.innerHTML = `
+      <span>
+        ${i.products.name}
+        ${i.mix ? `(ผสม ${i.mix.name})` : ""}
+        ${i.status === "draft" ? "<span class='text-yellow-400'>(draft)</span>" : ""}
+      </span>
+      ${i.status === "draft"
+        ? `<button class="text-red-400">ลบ</button>`
+        : ""
+      }
+    `
+
+    if (i.status === "draft") {
+      div.querySelector("button").onclick = () => deleteDraftItem(i.id)
+    }
+
     orderItems.appendChild(div)
   })
 
   totalPrice.textContent = total + " ฿"
+  sendOrderBtn.disabled = !hasDraft
+}
+
+/* ================= DELETE DRAFT ================= */
+async function deleteDraftItem(id) {
+  await sb.from("order_items").delete().eq("id", id)
+  loadOrderItems()
+}
+
+/* ================= SEND ORDER ================= */
+sendOrderBtn.onclick = async () => {
+  if (!currentOrderId) return
+
+  // เปลี่ยน draft → pending
+  await sb.from("order_items")
+    .update({ status: "pending" })
+    .eq("order_id", currentOrderId)
+    .eq("status", "draft")
+
+  // ล็อกโต๊ะ
+  await sb.from("tables")
+    .update({
+      status: "occupied",
+      current_order_id: currentOrderId
+    })
+    .eq("id", selectedTableId)
+
+  sendOrderBtn.disabled = true
+  loadTables()
+  loadOrderItems()
 }
 
 /* ================= INIT ================= */
 const btnNoodle = document.getElementById("btn-noodle")
 const btnDrink  = document.getElementById("btn-drink")
 const btnSnack  = document.getElementById("btn-snack")
+const sendOrderBtn = document.getElementById("sendOrderBtn")
 
 btnNoodle.onclick = () => setCategory("ขนมจีน")
 btnDrink.onclick  = () => setCategory("เครื่องดื่ม")
