@@ -10,11 +10,8 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-body{
-  background:#020617;
-  color:#e5e7eb;
-}
-button{ font-weight:600 }
+body{background:#020617;color:#e5e7eb}
+button{font-weight:600}
 </style>
 </head>
 
@@ -22,176 +19,55 @@ button{ font-weight:600 }
 
 <h1 class="text-xl font-bold text-center">🍜 POS ร้านขนมจีน</h1>
 
-<!-- เลือกโต๊ะ -->
 <select id="tableSelect" class="w-full p-2 text-black rounded"
  onchange="selectTable()">
-  <option value="">-- เลือกโต๊ะ --</option>
+ <option value="">-- เลือกโต๊ะ --</option>
 </select>
 
-<!-- หมวด -->
-<div id="categoryBar" class="flex gap-2 overflow-x-auto"></div>
-
-<!-- เมนู -->
 <div id="menu" class="grid grid-cols-2 gap-2"></div>
 
-<!-- บิล -->
 <div class="bg-slate-800 p-3 rounded space-y-2">
-  <div id="bill"></div>
+ <div id="bill"></div>
+ <div class="border-t pt-2 font-bold">
+  รวม: <span id="total">0</span> บาท
+ </div>
 
-  <div class="border-t border-slate-600 pt-2 font-bold text-lg">
-    รวม: <span id="total">0</span> บาท
-  </div>
-
-  <!-- 🔥 ส่งครัว -->
-  <button onclick="sendToKitchen()"
-   class="w-full bg-orange-500 py-2 rounded">
-   🔥 ส่งเข้าครัว
-  </button>
+ <button onclick="sendToKitchen()"
+  class="w-full bg-orange-500 py-2 rounded">
+  🔥 ส่งเข้าครัว
+ </button>
 </div>
 
-<!-- ชำระเงิน -->
 <div class="flex gap-2">
-  <button onclick="checkout('cash')"
-   class="flex-1 bg-emerald-600 py-3 rounded">💵 เงินสด</button>
-  <button onclick="checkout('transfer')"
-   class="flex-1 bg-indigo-600 py-3 rounded">📲 โอน</button>
-</div>
-
-<!-- ================= MODAL ขนมจีน ================= -->
-<div id="addonModal"
- class="fixed inset-0 bg-black/70 hidden items-center justify-center">
-  <div class="bg-slate-800 p-4 rounded w-80 space-y-2">
-    <h2 id="addonTitle" class="font-bold text-center"></h2>
-
-    <label>
-      <input type="checkbox" id="addonSpecial"> พิเศษ +10
-    </label>
-
-    <label>
-      <input type="checkbox" id="addonMix" onchange="toggleMix()"> ผสมน้ำ +10
-    </label>
-
-    <select id="mixSelect"
-     class="w-full text-black hidden"></select>
-
-    <button onclick="confirmAddon()"
-     class="bg-emerald-600 w-full py-2 rounded">
-      เพิ่ม
-    </button>
-
-    <button onclick="closeAddon()"
-     class="bg-slate-600 w-full py-1 rounded">
-      ยกเลิก
-    </button>
-  </div>
-</div>
-
-<!-- ================= MODAL ชำระเงิน ================= -->
-<div id="payModal"
- class="fixed inset-0 bg-black/70 hidden items-center justify-center">
-  <div class="bg-slate-800 p-4 rounded w-80 space-y-2">
-    <h2 id="payTitle" class="font-bold text-center"></h2>
-
-    <div id="transferBox" class="hidden text-center">
-      <img id="ppQR" class="mx-auto w-56 bg-white p-2 rounded">
-      <button onclick="confirmPay()"
-       class="bg-indigo-600 w-full py-2 rounded">
-       รับโอนแล้ว
-      </button>
-    </div>
-
-    <div id="cashBox" class="hidden space-y-1">
-      <input id="cashInput" type="number"
-       class="w-full p-2 text-black rounded"
-       placeholder="รับเงิน"
-       oninput="calcChange()">
-      เงินทอน: <span id="changeText">0</span>
-      <button onclick="confirmPay()"
-       class="bg-emerald-600 w-full py-2 rounded">
-       รับเงินแล้ว
-      </button>
-    </div>
-
-    <button onclick="closePay()"
-     class="bg-red-600 w-full py-1 rounded">
-     ยกเลิก
-    </button>
-  </div>
+ <button onclick="checkout('cash')"
+  class="flex-1 bg-emerald-600 py-3 rounded">💵 เงินสด</button>
+ <button onclick="checkout('transfer')"
+  class="flex-1 bg-indigo-600 py-3 rounded">📲 โอน</button>
 </div>
 
 <script>
-/* ================= CONFIG ================= */
+/* ===== CONFIG ===== */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
 const PROMPTPAY_ID = "0869525072";
 
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-/* ================= STATE ================= */
-let categories=[], products=[], tables=[];
-let currentOrder=null;
-let cartDraft=[];
-let currentProduct=null;
+/* ===== STATE ===== */
+let tables=[], products=[], currentOrder=null;
 
-/* ================= INIT ================= */
+/* ===== INIT ===== */
 async function init(){
-  categories = (await db.from('categories').select('*')).data;
-  products   = (await db.from('products').select('*').eq('active',true)).data;
-  tables     = (await db.from('tables').select('*')).data;
+  tables=(await db.from('tables').select('*')).data;
+  products=(await db.from('products').select('*').eq('active',true)).data;
 
-  renderTables();
-  renderCategories();
-}
-init();
-
-/* ================= TABLE ================= */
-function renderTables(){
   tableSelect.innerHTML='<option value="">-- เลือกโต๊ะ --</option>';
   tables.forEach(t=>{
-    tableSelect.innerHTML+=`
-      <option value="${t.id}">
-        ${t.name} (${t.status})
-      </option>`;
+    tableSelect.innerHTML+=
+     `<option value="${t.id}">${t.name} (${t.status})</option>`;
   });
-}
 
-async function selectTable(){
-  const tableId=tableSelect.value;
-  if(!tableId) return;
-
-  const { data:order } = await db
-    .from('orders')
-    .select('*')
-    .eq('table_id',tableId)
-    .eq('status','open')
-    .maybeSingle();
-
-  if(order){
-    currentOrder=order;
-    loadBill();
-  }else{
-    currentOrder=null;
-    bill.innerHTML='';
-    total.innerText=0;
-  }
-}
-
-/* ================= CATEGORY ================= */
-function renderCategories(){
-  categoryBar.innerHTML='';
-  categories.forEach(c=>{
-    const b=document.createElement('button');
-    b.className='bg-slate-700 px-4 py-2 rounded';
-    b.innerText=c.name;
-    b.onclick=()=>loadCategory(c.name);
-    categoryBar.appendChild(b);
-  });
-}
-
-function loadCategory(cat){
-  menu.innerHTML='';
-  products.filter(p=>p.category===cat)
-  .forEach(p=>{
+  products.forEach(p=>{
     const b=document.createElement('button');
     b.className='bg-slate-700 p-3 rounded';
     b.innerText=`${p.name}\n${p.price} บาท`;
@@ -199,144 +75,107 @@ function loadCategory(cat){
     menu.appendChild(b);
   });
 }
+init();
 
-/* ================= ADD ITEM ================= */
+/* ===== TABLE ===== */
+async function selectTable(){
+ const tableId=tableSelect.value;
+ if(!tableId) return;
+
+ const { data } = await db.from('orders')
+  .select('*')
+  .eq('table_id',tableId)
+  .eq('status','open')
+  .maybeSingle();
+
+ currentOrder=data||null;
+ loadBill();
+}
+
+/* ===== ADD ITEM ===== */
 async function addItem(p){
-  if(!currentOrder){
-    const { data } = await db.from('orders')
-      .insert({
-        table_id: tableSelect.value,
-        status:'open'
-      })
-      .select().single();
+ if(!currentOrder){
+  const { data } = await db.from('orders')
+   .insert({table_id:tableSelect.value})
+   .select().single();
+  currentOrder=data;
+  await db.from('tables')
+   .update({status:'busy'})
+   .eq('id',tableSelect.value);
+ }
 
-    currentOrder=data;
-    await db.from('tables')
-      .update({status:'busy'})
-      .eq('id',tableSelect.value);
-  }
+ const { error } = await db.from('order_items').insert({
+  order_id:currentOrder.id,
+  product_name:p.name,
+  price:Number(p.price),
+  qty:1,
+  status:'draft'
+ });
 
-  if(p.category==='ขนมจีน'){
-    currentProduct=p;
-    addonTitle.innerText=p.name;
-    buildMixOptions(p.name);
-    addonModal.classList.replace('hidden','flex');
-    return;
-  }
-
-  await addDraftItem(p.name,p.price);
-  loadBill();
+ if(error){
+  console.error(error);
+  Swal.fire(error.message);
+ }
+ loadBill();
 }
 
-async function addDraftItem(name,price){
-  await db.from('order_items').insert({
-    order_id: currentOrder.id,
-    product_name:name,
-    price,
-    qty:1,
-    status:'draft'
-  });
-}
-
-/* ================= ADDON ================= */
-function buildMixOptions(main){
-  mixSelect.innerHTML='<option value="">-- เลือกน้ำ --</option>';
-  products.filter(p=>p.category==='ขนมจีน'&&p.name!==main)
-    .forEach(p=>mixSelect.innerHTML+=`<option>${p.name}</option>`);
-}
-
-function toggleMix(){
-  mixSelect.classList.toggle('hidden',!addonMix.checked);
-}
-
-async function confirmAddon(){
-  let name=currentProduct.name;
-  let price=currentProduct.price;
-  let opt=[];
-
-  if(addonSpecial.checked){ price+=10; opt.push('พิเศษ'); }
-  if(addonMix.checked){
-    if(!mixSelect.value){ alert('เลือกน้ำ'); return; }
-    price+=10; opt.push(`ผสมน้ำ:${mixSelect.value}`);
-  }
-
-  if(opt.length) name+=` (${opt.join(',')})`;
-  await addDraftItem(name,price);
-  closeAddon();
-  loadBill();
-}
-
-function closeAddon(){
-  addonModal.classList.replace('flex','hidden');
-  addonSpecial.checked=false;
-  addonMix.checked=false;
-  mixSelect.classList.add('hidden');
-}
-
-/* ================= BILL ================= */
+/* ===== BILL ===== */
 async function loadBill(){
-  const { data } = await db.from('order_items')
-    .select('*')
-    .eq('order_id',currentOrder.id);
+ if(!currentOrder){bill.innerHTML='';total.innerText=0;return;}
 
-  bill.innerHTML='';
-  let sum=0;
-  data.forEach(i=>{
-    bill.innerHTML+=`<div>${i.product_name} x ${i.qty}</div>`;
-    sum+=i.price*i.qty;
-  });
-  total.innerText=sum;
+ const { data } = await db.from('order_items')
+  .select('*')
+  .eq('order_id',currentOrder.id);
+
+ let sum=0;
+ bill.innerHTML='';
+ data.forEach(i=>{
+  bill.innerHTML+=`<div>${i.product_name} x ${i.qty}</div>`;
+  sum+=i.price*i.qty;
+ });
+ total.innerText=sum;
 }
 
-/* ================= SEND KITCHEN ================= */
+/* ===== SEND KITCHEN ===== */
 async function sendToKitchen(){
-  if(!currentOrder) return;
-
-  await db.from('order_items')
-    .update({status:'sent'})
-    .eq('order_id',currentOrder.id)
-    .eq('status','draft');
-
-  Swal.fire('ส่งครัวแล้ว');
+ if(!currentOrder) return;
+ await db.from('order_items')
+  .update({status:'sent'})
+  .eq('order_id',currentOrder.id)
+  .eq('status','draft');
+ Swal.fire('ส่งเข้าครัวแล้ว');
 }
 
-/* ================= PAYMENT ================= */
+/* ===== PAYMENT ===== */
 function checkout(type){
-  if(!currentOrder) return;
-  const sum=Number(total.innerText);
-  payModal.classList.replace('hidden','flex');
-
-  transferBox.classList.add('hidden');
-  cashBox.classList.add('hidden');
-
-  if(type==='transfer'){
-    payTitle.innerText=`โอน ${sum} บาท`;
-    transferBox.classList.remove('hidden');
-    ppQR.src=`https://promptpay.io/${PROMPTPAY_ID}/${sum}.png`;
-  }else{
-    payTitle.innerText=`เงินสด ${sum} บาท`;
-    cashBox.classList.remove('hidden');
-  }
+ if(!currentOrder) return;
+ const sum=Number(total.innerText);
+ if(type==='transfer'){
+  Swal.fire({
+   title:'สแกนจ่าย',
+   html:`<img src="https://promptpay.io/${PROMPTPAY_ID}/${sum}.png">`,
+   confirmButtonText:'รับโอนแล้ว'
+  }).then(confirmPay);
+ }else{
+  Swal.fire({
+   title:`รับเงิน ${sum}`,
+   confirmButtonText:'รับเงินแล้ว'
+  }).then(confirmPay);
+ }
 }
 
 async function confirmPay(){
-  await db.from('orders')
-    .update({status:'paid', total:Number(total.innerText)})
-    .eq('id',currentOrder.id);
+ await db.from('orders')
+  .update({status:'paid',total:Number(total.innerText)})
+  .eq('id',currentOrder.id);
 
-  await db.from('tables')
-    .update({status:'free'})
-    .eq('id',tableSelect.value);
+ await db.from('tables')
+  .update({status:'free'})
+  .eq('id',tableSelect.value);
 
-  currentOrder=null;
-  bill.innerHTML='';
-  total.innerText=0;
-  payModal.classList.replace('flex','hidden');
-  Swal.fire('ชำระเงินเรียบร้อย');
-}
-
-function closePay(){
-  payModal.classList.replace('flex','hidden');
+ currentOrder=null;
+ loadBill();
+ Swal.fire('ชำระเงินเรียบร้อย');
 }
 </script>
 
