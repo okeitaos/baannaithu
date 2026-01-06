@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>👨‍🍳 Kitchen Display</title>
+<title>👨‍🍳 Kitchen</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -14,12 +14,10 @@
 
 <body class="bg-slate-900 text-white min-h-screen p-4">
 
-<!-- เสียงแจ้งเตือน -->
 <audio id="dingSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
 
 <div class="max-w-6xl mx-auto">
   <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว</h1>
-
   <div id="orderList" class="space-y-4"></div>
 </div>
 
@@ -41,21 +39,24 @@ async function loadOrders(playSound = false) {
     .select(`
       id,
       qty,
-      price,
       option_special,
       option_mix,
-      mix_sauce_id,
       status,
       products(name),
-      orders(id, table_id, tables(table_no))
+      orders(
+        id,
+        tables(table_no)
+      )
     `)
     .eq("status", "pending")
     .order("id", { ascending: true })
 
-  if (error) return
+  if (error) {
+    console.error("loadOrders error", error)
+    return
+  }
 
   orderList.innerHTML = ""
-
   let hasNew = false
 
   data.forEach(item => {
@@ -63,12 +64,6 @@ async function loadOrders(playSound = false) {
       knownItemIds.add(item.id)
       hasNew = true
     }
-
-    const mixName = item.mix_sauce_id
-      ? item.products && item.mix_sauce_id
-        ? item.mix_sauce_id
-        : ""
-      : ""
 
     const card = document.createElement("div")
     card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
@@ -146,11 +141,12 @@ sb.channel("kitchen-realtime")
   .on(
     "postgres_changes",
     { event: "UPDATE", schema: "public", table: "order_items" },
-    payload => {
-      loadOrders()
-    }
+    () => loadOrders()
   )
   .subscribe()
+
+/* ================= FALLBACK POLLING ================= */
+setInterval(() => loadOrders(), 3000)
 
 /* ================= INIT ================= */
 loadOrders()
