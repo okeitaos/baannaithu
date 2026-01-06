@@ -275,38 +275,79 @@ function drawTimeChart(orders){
 
 /* ================= CHART PRODUCT ================= */
 async function drawProductChart(){
-  const d=billDate.value; if(!d) return;
-  const {start,end}=thaiRange(d);
-  const category=categoryFilter.value;
+  const d = billDate.value;
+  if(!d) return;
 
-  const { data:products } = await db.from('products').select('name,category');
-  const mapCat={}; products.forEach(p=>mapCat[p.name]=p.category);
+  const { start, end } = thaiRange(d);
+  const selectedCategory = categoryFilter.value;
 
-  const { data:orders } = await db.from('orders')
-    .select(`order_items!order_items_order_id_fkey(product_name,qty)`)
-    .gte('created_at',start).lte('created_at',end);
+  // ดึง product + category
+  const { data: products } = await db
+    .from('products')
+    .select('name, category');
 
-  const map={};
-  orders.forEach(o=>o.order_items.forEach(i=>{
-    if(category && mapCat[i.product_name]!==category) return;
-    map[i.product_name]=(map[i.product_name]||0)+i.qty;
-  }));
+  // map ชื่อสินค้า → หมวด
+  const productCategoryMap = {};
+  products.forEach(p => {
+    productCategoryMap[p.name] = p.category;
+  });
 
-  const labels=Object.keys(map);
-  const values=Object.values(map);
-  const ctx=document.getElementById('productChart').getContext('2d');
+  const { data: orders } = await db
+    .from('orders')
+    .select(`
+      order_items!order_items_order_id_fkey(
+        product_name,
+        qty
+      )
+    `)
+    .gte('created_at', start)
+    .lte('created_at', end);
 
-  if(window._productChart instanceof Chart){
+  const summary = {};
+
+  orders.forEach(o => {
+    o.order_items.forEach(i => {
+
+      // 🔑 ตัด option ออก เช่น "น้ำยากะทิ (ผสมน้ำ:แกงไตปลา)"
+      const baseName = i.product_name.split(' (')[0];
+
+      const productCategory = productCategoryMap[baseName];
+
+      // กรองตามหมวด
+      if (selectedCategory && productCategory !== selectedCategory) return;
+
+      summary[baseName] = (summary[baseName] || 0) + i.qty;
+    });
+  });
+
+  const labels = Object.keys(summary);
+  const values = Object.values(summary);
+
+  const ctx = document.getElementById('productChart').getContext('2d');
+
+  if (window._productChart instanceof Chart) {
     window._productChart.destroy();
   }
-  if(!labels.length) return;
 
-  window._productChart=new Chart(ctx,{
-    type:'bar',
-    data:{labels,datasets:[{label:'จำนวน',data:values,backgroundColor:'#38bdf8'}]},
-    options:{indexAxis:'y',plugins:{legend:{display:false}}}
+  if (!labels.length) return;
+
+  window._productChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'จำนวนที่ขายได้',
+        data: values,
+        backgroundColor: '#38bdf8'
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } }
+    }
   });
 }
+
 
 /* ================= INIT ================= */
 loadCategories();
