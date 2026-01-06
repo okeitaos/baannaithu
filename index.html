@@ -68,7 +68,10 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 let selectedTable = null
 let currentCategory = "ขนมจีน"
 let products = []
-let cart = []   // <<< สำคัญ: เก็บใน memory เท่านั้น
+let noodleMenus = []
+let cart = []
+
+const restrictedMixTargets = ["แกงปู", "น้ำชุบหยำ"]
 
 /* ================= LOAD TABLES ================= */
 async function loadTables() {
@@ -84,6 +87,7 @@ async function loadTables() {
     btn.onclick = () => {
       selectedTable = t
       currentTable.textContent = t.table_no
+      renderCart()
     }
     tableList.appendChild(btn)
   })
@@ -94,30 +98,68 @@ async function loadMenu() {
   const { data } = await sb
     .from("products")
     .select("*")
-    .eq("category", currentCategory)
     .eq("active", true)
 
   products = data || []
+  noodleMenus = products.filter(p => p.category === "ขนมจีน")
+
+  const list = products.filter(p => p.category === currentCategory)
   menuList.innerHTML = ""
 
-  products.forEach(p => {
-    const div = document.createElement("div")
-    div.className = "bg-slate-700 p-3 rounded flex justify-between"
+  list.forEach(p => {
+    const card = document.createElement("div")
+    card.className = "bg-slate-700 p-3 rounded"
 
-    div.innerHTML = `
-      <div>
-        <div class="font-bold">${p.name}</div>
-        <div>${p.price} บาท</div>
+    let optionsHTML = ""
+    if (p.category === "ขนมจีน") {
+      const mixOptions = noodleMenus.filter(n =>
+        n.name !== p.name &&
+        !restrictedMixTargets.includes(n.name)
+      )
+
+      optionsHTML = `
+        <label class="block text-sm mt-1">
+          <input type="checkbox" class="sp"> พิเศษ (+10)
+        </label>
+        <label class="block text-sm mt-1">
+          ผสมน้ำ (+10)
+          <select class="mix text-black ml-1">
+            <option value="">-- ไม่ผสม --</option>
+            ${mixOptions.map(m => `<option value="${m.id}">${m.name}</option>`).join("")}
+          </select>
+        </label>
+      `
+    }
+
+    card.innerHTML = `
+      <div class="flex justify-between items-center">
+        <div>
+          <div class="font-bold">${p.name}</div>
+          <div>${p.price} บาท</div>
+        </div>
+        <button class="bg-blue-600 px-4 rounded">เพิ่ม</button>
       </div>
-      <button class="bg-blue-600 px-4 rounded">เพิ่ม</button>
+      ${optionsHTML}
     `
 
-    div.querySelector("button").onclick = () => {
-      cart.push({ product: p, qty: 1 })
+    card.querySelector("button").onclick = () => {
+      const sp = card.querySelector(".sp")?.checked || false
+      const mixId = card.querySelector(".mix")?.value || null
+
+      let price = p.price
+      if (sp) price += 10
+      if (mixId) price += 10
+
+      cart.push({
+        product: p,
+        price,
+        option_special: sp,
+        mix_sauce_id: mixId
+      })
       renderCart()
     }
 
-    menuList.appendChild(div)
+    menuList.appendChild(card)
   })
 }
 
@@ -132,13 +174,20 @@ function renderCart() {
   let total = 0
 
   cart.forEach((item, index) => {
-    total += item.product.price * item.qty
+    total += item.price
+    const mixName = item.mix_sauce_id
+      ? noodleMenus.find(n => n.id === item.mix_sauce_id)?.name
+      : ""
 
     const div = document.createElement("div")
     div.className = "bg-slate-700 p-2 rounded flex justify-between items-center"
 
     div.innerHTML = `
-      <span>${item.product.name}</span>
+      <span>
+        ${item.product.name}
+        ${item.option_special ? "(พิเศษ)" : ""}
+        ${mixName ? `(ผสม ${mixName})` : ""}
+      </span>
       <button class="text-red-400">ลบ</button>
     `
 
@@ -158,35 +207,32 @@ function renderCart() {
 async function submitOrder() {
   if (!selectedTable || cart.length === 0) return
 
-  // 1) สร้าง order
   const { data: order } = await sb
     .from("orders")
     .insert({ table_id: selectedTable.id })
     .select()
     .single()
 
-  // 2) insert items
   for (const item of cart) {
     await sb.from("order_items").insert({
       order_id: order.id,
       product_id: item.product.id,
-      price: item.product.price,
-      qty: item.qty,
+      price: item.price,
+      option_special: item.option_special,
+      option_mix: !!item.mix_sauce_id,
+      mix_sauce_id: item.mix_sauce_id,
       status: "pending"
     })
   }
 
-  // 3) lock โต๊ะ
   await sb.from("tables")
     .update({ status: "occupied", current_order_id: order.id })
     .eq("id", selectedTable.id)
 
-  // 4) clear state
   cart = []
   renderCart()
-  alert("ส่งออร์เดอร์เรียบร้อย")
-
   loadTables()
+  alert("ส่งออร์เดอร์เรียบร้อย")
 }
 
 /* ================= INIT ================= */
