@@ -23,7 +23,6 @@
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
-    <!-- CATEGORY BUTTONS -->
     <div class="flex gap-2 mb-3">
       <button id="btn-noodle" class="px-3 py-1 rounded bg-orange-600">🍜 ขนมจีน</button>
       <button id="btn-drink" class="px-3 py-1 rounded bg-slate-600">🥤 เครื่องดื่ม</button>
@@ -35,7 +34,10 @@
 
   <!-- ORDER -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">🧾 โต๊ะ <span id="currentTable">-</span></h2>
+    <h2 class="font-bold mb-3">
+      🧾 โต๊ะ <span id="currentTable">-</span>
+    </h2>
+
     <div id="orderItems" class="space-y-2 mb-3"></div>
 
     <div class="border-t pt-3">
@@ -44,7 +46,8 @@
         <span id="totalPrice">0 ฿</span>
       </div>
 
-      <button id="payBtn" class="w-full mt-3 bg-green-600 py-2 rounded">
+      <button id="payBtn"
+        class="w-full mt-3 bg-green-600 py-2 rounded">
         💰 คิดเงิน
       </button>
     </div>
@@ -54,7 +57,6 @@
 
 <script>
 /* ================= CONFIG ================= */
-// ❗ ใส่ค่าจริงจาก Supabase
 const sb = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
@@ -92,7 +94,7 @@ async function loadTables() {
     .order("table_no")
 
   tableList.innerHTML = ""
-  data.forEach(t => {
+  ;(data || []).forEach(t => {
     const btn = document.createElement("button")
     btn.className = "bg-green-600 rounded p-2"
     btn.textContent = "โต๊ะ " + t.table_no
@@ -148,7 +150,7 @@ async function loadMenu() {
   noodleMenus = noodles || []
   menuList.innerHTML = ""
 
-  data.forEach(p => {
+  ;(data || []).forEach(p => {
     let options = ""
 
     if (p.category === 'ขนมจีน') {
@@ -165,7 +167,9 @@ async function loadMenu() {
             ผสม (+10)
             <select id="mix_${p.id}" class="text-black ml-1">
               <option value="">-- ไม่ผสม --</option>
-              ${mixes.map(m => `<option value="${m.id}">${m.name}</option>`).join("")}
+              ${mixes.map(m =>
+                `<option value="${m.id}">${m.name}</option>`
+              ).join("")}
             </select>
           </label>
         `
@@ -191,42 +195,30 @@ async function loadMenu() {
   })
 }
 
-/* ================= ORDER ================= */
-async function addItem(id, base, name) {
-  if (!currentOrderId) return alert("เลือกโต๊ะก่อน")
-
-  const sp = document.getElementById("sp_" + id)?.checked || false
-  const mixId = document.getElementById("mix_" + id)?.value || null
-
-  if (mixId && mixId === id) {
-    alert("❌ ไม่สามารถผสมกับตัวเองได้")
+/* ================= ORDER ITEMS ================= */
+async function loadOrderItems() {
+  if (!currentOrderId) {
+    orderItems.innerHTML = ""
+    totalPrice.textContent = "0 ฿"
     return
   }
 
-  let price = base
-  if (sp) price += 10
-  if (mixId) price += 10
-
-  await sb.from("order_items").insert({
-    order_id: currentOrderId,
-    product_id: id,
-    price,
-    option_special: sp,
-    option_mix: !!mixId,
-    mix_sauce_id: mixId
-  })
-
-  loadOrderItems()
-}
-
-/* ================= ORDER ITEMS ================= */
-async function loadOrderItems() {
-  if (!currentOrderId) return
-
-  const { data } = await sb
+  const { data, error } = await sb
     .from("order_items")
-    .select(`price, option_special, option_mix, products(name), mix:mix_sauce_id(name)`)
+    .select(`
+      price,
+      option_special,
+      option_mix,
+      products(name),
+      mix:mix_sauce_id(name)
+    `)
     .eq("order_id", currentOrderId)
+
+  if (error || !Array.isArray(data)) {
+    orderItems.innerHTML = ""
+    totalPrice.textContent = "0 ฿"
+    return
+  }
 
   let total = 0
   orderItems.innerHTML = ""
@@ -238,7 +230,7 @@ async function loadOrderItems() {
     div.textContent =
       i.products.name +
       (i.option_special ? " (พิเศษ)" : "") +
-      (i.option_mix ? ` (ผสม ${i.mix.name})` : "")
+      (i.option_mix ? ` (ผสม ${i.mix?.name})` : "")
     orderItems.appendChild(div)
   })
 
@@ -255,7 +247,10 @@ document.getElementById("payBtn").onclick = payOrder
 async function payOrder() {
   if (!currentOrderId) return
 
-  await sb.from("orders").update({ status: "paid" }).eq("id", currentOrderId)
+  await sb.from("orders")
+    .update({ status: "paid" })
+    .eq("id", currentOrderId)
+
   await sb.from("tables")
     .update({ status: "available", current_order_id: null })
     .eq("id", currentTableId)
@@ -266,8 +261,14 @@ async function payOrder() {
 
 /* ================= REALTIME ================= */
 sb.channel("pos")
-  .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, loadOrderItems)
-  .on("postgres_changes", { event: "*", schema: "public", table: "tables" }, loadTables)
+  .on("postgres_changes",
+    { event: "*", schema: "public", table: "order_items" },
+    loadOrderItems
+  )
+  .on("postgres_changes",
+    { event: "*", schema: "public", table: "tables" },
+    loadTables
+  )
   .subscribe()
 
 /* ================= INIT ================= */
