@@ -33,24 +33,28 @@ const ding = document.getElementById("dingSound")
 
 let knownItemIds = new Set()
 let productMap = {}
+let tableMap = {}
+let orderTableMap = {}
 
-/* ================= LOAD PRODUCTS ================= */
+/* ================= LOAD MASTER DATA ================= */
 async function loadProducts() {
-  const { data, error } = await sb
-    .from("products")
-    .select("id,name")
+  const { data } = await sb.from("products").select("id,name")
+  ;(data || []).forEach(p => productMap[p.id] = p.name)
+}
 
-  if (error) {
-    console.error("loadProducts error", error)
-    return
-  }
+async function loadTables() {
+  const { data } = await sb.from("tables").select("id,table_no")
+  ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
+}
 
-  ;(data || []).forEach(p => {
-    productMap[p.id] = p.name
+async function loadOrdersMap() {
+  const { data } = await sb.from("orders").select("id,table_id")
+  ;(data || []).forEach(o => {
+    orderTableMap[o.id] = tableMap[o.table_id] || "-"
   })
 }
 
-/* ================= LOAD ORDERS ================= */
+/* ================= LOAD ORDER ITEMS ================= */
 async function loadOrders(playSound = false) {
   const { data, error } = await sb
     .from("order_items")
@@ -73,22 +77,6 @@ async function loadOrders(playSound = false) {
   }
 
   const rows = data || []
-
-  // map โต๊ะ
-  const orderIds = [...new Set(rows.map(r => r.order_id))]
-  let tableMap = {}
-
-  if (orderIds.length > 0) {
-    const { data: orders } = await sb
-      .from("orders")
-      .select("id, tables(table_no)")
-      .in("id", orderIds)
-
-    ;(orders || []).forEach(o => {
-      tableMap[o.id] = o.tables?.table_no || "-"
-    })
-  }
-
   orderList.innerHTML = ""
   let hasNew = false
 
@@ -104,13 +92,15 @@ async function loadOrders(playSound = false) {
         ? productMap[item.mix_sauce_id]
         : ""
 
+    const tableNo = orderTableMap[item.order_id] || "-"
+
     const card = document.createElement("div")
     card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
 
     card.innerHTML = `
       <div class="flex justify-between items-center mb-2">
         <div class="font-bold text-lg">
-          🍽️ โต๊ะ ${tableMap[item.order_id] || "-"}
+          🍽️ โต๊ะ ${tableNo}
         </div>
         <button class="doneBtn bg-green-600 px-4 py-1 rounded">
           ✅ ทำเสร็จแล้ว
@@ -166,7 +156,7 @@ async function loadOrders(playSound = false) {
   }
 }
 
-/* ================= REALTIME (NO CHAIN) ================= */
+/* ================= REALTIME ================= */
 const channel = sb.channel("kitchen-realtime")
 
 channel.on(
@@ -182,9 +172,7 @@ channel.on(
 channel.on(
   "postgres_changes",
   { event: "UPDATE", schema: "public", table: "order_items" },
-  () => {
-    loadOrders()
-  }
+  () => loadOrders()
 )
 
 channel.subscribe()
@@ -192,6 +180,8 @@ channel.subscribe()
 /* ================= INIT ================= */
 ;(async () => {
   await loadProducts()
+  await loadTables()
+  await loadOrdersMap()
   loadOrders()
 })()
 </script>
