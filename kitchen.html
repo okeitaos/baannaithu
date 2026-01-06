@@ -42,14 +42,14 @@ async function loadOrders(playSound = false) {
       option_special,
       option_mix,
       status,
-      products:products!order_items_product_id_fkey(name),
+      product:products!order_items_product_id_fkey(name),
+      mix:products!order_items_mix_sauce_id_fkey(name),
       orders(
-        id,
         tables(table_no)
       )
     `)
     .eq("status", "pending")
-    .order("id", { ascending: true })
+    .order("created_at", { ascending: true })
 
   if (error) {
     console.error("loadOrders error", error)
@@ -65,6 +65,10 @@ async function loadOrders(playSound = false) {
       hasNew = true
     }
 
+    const mixText = item.option_mix && item.mix
+      ? ` (ผสม ${item.mix.name})`
+      : ""
+
     const card = document.createElement("div")
     card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
 
@@ -79,9 +83,9 @@ async function loadOrders(playSound = false) {
       </div>
 
       <div class="text-xl font-bold">
-        ${item.products.name}
+        ${item.product.name}
         ${item.option_special ? "(พิเศษ)" : ""}
-        ${item.option_mix ? "(ผสม)" : ""}
+        ${mixText}
       </div>
 
       <div class="text-sm text-gray-300 mt-1">
@@ -92,7 +96,7 @@ async function loadOrders(playSound = false) {
     card.querySelector(".doneBtn").onclick = async () => {
       const confirm = await Swal.fire({
         title: "ยืนยันทำเสร็จแล้ว?",
-        text: `${item.products.name} x ${item.qty}`,
+        text: `${item.product.name} x ${item.qty}`,
         icon: "question",
         showCancelButton: true,
         confirmButtonText: "เสร็จแล้ว",
