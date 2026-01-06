@@ -14,19 +14,23 @@
 
 <h1 class="text-xl font-bold text-center">🍜 POS ร้านขนมจีน</h1>
 
+<!-- เลือกโต๊ะ -->
 <select id="tableSelect" class="w-full p-2 text-black rounded">
   <option value="">-- เลือกโต๊ะ --</option>
 </select>
 
+<!-- เมนู -->
 <div id="menu" class="grid grid-cols-2 gap-2"></div>
 
+<!-- บิล -->
 <div class="bg-slate-800 p-3 rounded">
   <div id="bill"></div>
-  <div class="border-t mt-2 pt-2 font-bold">
+  <div class="border-t border-slate-600 mt-2 pt-2 text-lg font-bold">
     รวม: <span id="total">0</span> บาท
   </div>
 </div>
 
+<!-- ส่งครัว -->
 <button onclick="sendToKitchen()"
   class="w-full bg-emerald-600 py-3 rounded font-bold">
   🍳 ส่งเข้าครัว
@@ -36,6 +40,7 @@
 /* ================= SUPABASE ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
+
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ================= STATE ================= */
@@ -45,9 +50,37 @@ let cart = [];
 
 /* ================= INIT ================= */
 async function init(){
-  products = (await db.from('products').select('*').eq('active',true)).data || [];
-  tables = (await db.from('tables').select('*').eq('active',true)).data || [];
 
+  /* โหลดเมนู */
+  const { data:productData, error:productErr } =
+    await db.from('products')
+      .select('*')
+      .eq('active', true);
+
+  if(productErr){
+    console.error(productErr);
+    Swal.fire('โหลดเมนูไม่สำเร็จ');
+    return;
+  }
+
+  products = productData || [];
+
+  /* โหลดโต๊ะ (แก้ boolean ถูกต้อง) */
+  const { data:tableData, error:tableErr } =
+    await db.from('tables')
+      .select('*')
+      .eq('active', true);
+
+  if(tableErr){
+    console.error(tableErr);
+    Swal.fire('โหลดโต๊ะไม่สำเร็จ');
+    return;
+  }
+
+  tables = tableData || [];
+
+  /* เติม select โต๊ะ */
+  tableSelect.innerHTML = '<option value="">-- เลือกโต๊ะ --</option>';
   tables.forEach(t=>{
     tableSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
   });
@@ -59,11 +92,11 @@ async function init(){
 function renderMenu(){
   menu.innerHTML = '';
   products.forEach(p=>{
-    const b = document.createElement('button');
-    b.className = 'bg-slate-700 p-3 rounded';
-    b.innerText = `${p.name}\n${p.price} บาท`;
-    b.onclick = ()=>addItem(p);
-    menu.appendChild(b);
+    const btn = document.createElement('button');
+    btn.className = 'bg-slate-700 p-3 rounded';
+    btn.innerText = `${p.name}\n${p.price} บาท`;
+    btn.onclick = ()=>addItem(p);
+    menu.appendChild(btn);
   });
 }
 
@@ -72,64 +105,86 @@ function addItem(p){
   if(found){
     found.qty++;
   }else{
-    cart.push({ name:p.name, price:p.price, qty:1 });
+    cart.push({
+      name:p.name,
+      price:p.price,
+      qty:1
+    });
   }
   renderBill();
 }
 
+/* ================= BILL ================= */
 function renderBill(){
   bill.innerHTML='';
-  let sum=0;
+  let sum = 0;
+
   cart.forEach((i,idx)=>{
-    sum+=i.price*i.qty;
-    bill.innerHTML+=`
+    sum += i.price * i.qty;
+    bill.innerHTML += `
       <div class="flex justify-between text-sm">
-        <span>${i.name} x${i.qty}</span>
-        <span>${i.price*i.qty}</span>
+        <span>${i.name} × ${i.qty}</span>
+        <span>${i.price * i.qty}</span>
       </div>
     `;
   });
-  total.innerText=sum;
+
+  total.innerText = sum;
 }
 
 /* ================= SEND TO KITCHEN ================= */
 async function sendToKitchen(){
-  if(!cart.length){
-    Swal.fire('ยังไม่มีรายการ');
-    return;
-  }
+
   if(!tableSelect.value){
     Swal.fire('กรุณาเลือกโต๊ะ');
     return;
   }
-
-  // 1️⃣ create order
-  const { data:order } = await db.from('orders')
-    .insert({
-      table_id: tableSelect.value,
-      status:'open'
-    })
-    .select()
-    .single();
-
-  // 2️⃣ create order items
-  for(const i of cart){
-    await db.from('order_items').insert({
-      order_id: order.id,
-      product_name: i.name,
-      price: i.price,
-      qty: i.qty
-    });
+  if(!cart.length){
+    Swal.fire('ยังไม่มีรายการ');
+    return;
   }
 
-  // 3️⃣ 🔥 broadcast แจ้งครัว
+  /* 1️⃣ สร้าง order */
+  const { data:order, error:orderErr } =
+    await db.from('orders')
+      .insert({
+        table_id: tableSelect.value,
+        status: 'open'
+      })
+      .select()
+      .single();
+
+  if(orderErr){
+    console.error(orderErr);
+    Swal.fire('สร้างบิลไม่สำเร็จ');
+    return;
+  }
+
+  /* 2️⃣ เพิ่ม order_items */
+  for(const i of cart){
+    const { error:itemErr } =
+      await db.from('order_items').insert({
+        order_id: order.id,
+        product_name: i.name,
+        price: i.price,
+        qty: i.qty
+      });
+
+    if(itemErr){
+      console.error(itemErr);
+      Swal.fire('บันทึกรายการอาหารไม่สำเร็จ');
+      return;
+    }
+  }
+
+  /* 3️⃣ 🔥 แจ้งครัว realtime */
   await db.channel('notify-kitchen').send({
     type:'broadcast',
     event:'new_order',
     payload:{ order_id: order.id }
   });
 
-  // 4️⃣ reset หน้าจอ (ไม่ปิดโต๊ะ)
+  /* 4️⃣ reset หน้าจอ */
   cart = [];
   renderBill();
 
@@ -139,6 +194,7 @@ async function sendToKitchen(){
   });
 }
 
+/* ================= START ================= */
 init();
 </script>
 
