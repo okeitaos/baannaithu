@@ -66,10 +66,10 @@ async function init(){
   products = productData || [];
 
   /* โหลดโต๊ะ (แก้ boolean ถูกต้อง) */
-  const { data:tableData, error:tableErr } =
-    await db.from('tables')
-      .select('*')
-      .eq('active', true);
+  const { data } = await db
+  .from('tables')
+  .select('*');
+
 
   if(tableErr){
     console.error(tableErr);
