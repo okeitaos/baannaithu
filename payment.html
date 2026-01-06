@@ -53,26 +53,33 @@ const sb = supabase.createClient(
 /* ================= STATE ================= */
 let currentOrder = null
 let productMap = {}
+let tableMap = {}
 
-/* ================= LOAD PRODUCTS ================= */
+/* ================= LOAD MASTER ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name,price")
   ;(data || []).forEach(p => productMap[p.id] = p)
 }
 
-/* ================= LOAD TABLES ================= */
 async function loadTables() {
+  const { data } = await sb.from("tables").select("id,table_no")
+  ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
+}
+
+/* ================= LOAD ORDERS ================= */
+async function loadOrders() {
   const { data } = await sb
     .from("orders")
-    .select("id, table_id, tables(table_no)")
-    .eq("status", "open")
+    .select("*")
+    .neq("status", "paid")   // ⭐ แก้ตรงนี้
+    .order("created_at", { ascending: true })
 
   tableList.innerHTML = ""
 
   ;(data || []).forEach(o => {
     const btn = document.createElement("button")
     btn.className = "w-full bg-blue-600 py-2 rounded"
-    btn.textContent = `โต๊ะ ${o.tables.table_no}`
+    btn.textContent = `โต๊ะ ${tableMap[o.table_id] || "-"}`
     btn.onclick = () => loadBill(o)
     tableList.appendChild(btn)
   })
@@ -92,6 +99,8 @@ async function loadBill(order) {
 
   ;(data || []).forEach(it => {
     const p = productMap[it.product_id]
+    if (!p) return
+
     const price = p.price * it.qty
     total += price
 
@@ -122,7 +131,7 @@ payBtn.onclick = async () => {
 
   if (!confirm.isConfirmed) return
 
-  // 1) ปิด order
+  // 1) ปิดบิล
   await sb.from("orders")
     .update({ status: "paid" })
     .eq("id", currentOrder.id)
@@ -139,13 +148,14 @@ payBtn.onclick = async () => {
   totalPrice.textContent = 0
   payBtn.disabled = true
 
-  loadTables()
+  loadOrders()
 }
 
 /* ================= INIT ================= */
 ;(async () => {
   await loadProducts()
   await loadTables()
+  await loadOrders()
 })()
 </script>
 
