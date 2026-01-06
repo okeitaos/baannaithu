@@ -36,7 +36,7 @@ let tableMap = {}
 let orderTableMap = {}
 let knownOrderIds = new Set()
 
-/* ================= LOAD MASTER DATA ================= */
+/* ================= LOAD MASTER ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
   ;(data || []).forEach(p => productMap[p.id] = p.name)
@@ -49,6 +49,7 @@ async function loadTables() {
 
 async function loadOrdersMap() {
   const { data } = await sb.from("orders").select("id,table_id")
+  orderTableMap = {}
   ;(data || []).forEach(o => {
     orderTableMap[o.id] = tableMap[o.table_id] || "-"
   })
@@ -79,7 +80,6 @@ async function loadBills(playSound = false) {
   const rows = data || []
   billList.innerHTML = ""
 
-  // group by order_id
   const bills = {}
   rows.forEach(item => {
     if (!bills[item.order_id]) bills[item.order_id] = []
@@ -98,7 +98,7 @@ async function loadBills(playSound = false) {
     const card = document.createElement("div")
     card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
 
-    let itemsHTML = items.map(it => {
+    const itemsHTML = items.map(it => {
       const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
       const mixName =
         it.option_mix && it.mix_sauce_id
@@ -124,10 +124,7 @@ async function loadBills(playSound = false) {
           ✅ เสร็จทั้งบิล
         </button>
       </div>
-
-      <div class="space-y-1">
-        ${itemsHTML}
-      </div>
+      ${itemsHTML}
     `
 
     card.querySelector(".doneBill").onclick = async () => {
@@ -141,20 +138,10 @@ async function loadBills(playSound = false) {
 
       if (!confirm.isConfirmed) return
 
-      // update ทุก item ใน order นี้
       await sb
         .from("order_items")
         .update({ status: "done" })
         .eq("order_id", orderId)
-
-      Swal.fire({
-        toast: true,
-        position: "top-end",
-        icon: "success",
-        title: "บิลนี้ทำเสร็จแล้ว",
-        showConfirmButton: false,
-        timer: 1200
-      })
 
       loadBills()
     }
@@ -174,8 +161,9 @@ const channel = sb.channel("kitchen-bill")
 channel.on(
   "postgres_changes",
   { event: "INSERT", schema: "public", table: "order_items" },
-  payload => {
+  async payload => {
     if (payload.new.status === "pending") {
+      await loadOrdersMap()   // ⭐ สำคัญ
       loadBills(true)
     }
   }
