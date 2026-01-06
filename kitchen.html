@@ -31,6 +31,16 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 const orderList = document.getElementById("orderList")
 const ding = document.getElementById("dingSound")
 let knownItemIds = new Set()
+let productMap = {}
+
+/* ================= LOAD PRODUCTS (ONCE) ================= */
+async function loadProducts() {
+  const { data } = await sb
+    .from("products")
+    .select("id,name")
+
+  data.forEach(p => productMap[p.id] = p.name)
+}
 
 /* ================= LOAD ORDERS ================= */
 async function loadOrders(playSound = false) {
@@ -38,15 +48,13 @@ async function loadOrders(playSound = false) {
     .from("order_items")
     .select(`
       id,
+      order_id,
+      product_id,
+      mix_sauce_id,
       qty,
       option_special,
       option_mix,
-      status,
-      product:products!order_items_product_id_fkey(name),
-      mix:products!order_items_mix_sauce_id_fkey(name),
-      orders(
-        tables(table_no)
-      )
+      status
     `)
     .eq("status", "pending")
     .order("created_at", { ascending: true })
@@ -54,6 +62,19 @@ async function loadOrders(playSound = false) {
   if (error) {
     console.error("loadOrders error", error)
     return
+  }
+
+  // ดึง table_no แยกจาก orders
+  const orderIds = [...new Set(data.map(i => i.order_id))]
+  let tableMap = {}
+
+  if (orderIds.length) {
+    const { data: orders } = await sb
+      .from("orders")
+      .select("id, tables(table_no)")
+      .in("id", orderIds)
+
+    orders.forEach(o => tableMap[o.id] = o.tables.table_no)
   }
 
   orderList.innerHTML = ""
@@ -65,8 +86,9 @@ async function loadOrders(playSound = false) {
       hasNew = true
     }
 
-    const mixText = item.option_mix && item.mix
-      ? ` (ผสม ${item.mix.name})`
+    const productName = productMap[item.product_id] || "ไม่ทราบชื่อ"
+    const mixName = item.option_mix && item.mix_sauce_id
+      ? productMap[item.mix_sauce_id]
       : ""
 
     const card = document.createElement("div")
@@ -75,7 +97,7 @@ async function loadOrders(playSound = false) {
     card.innerHTML = `
       <div class="flex justify-between items-center mb-2">
         <div class="font-bold text-lg">
-          🍽️ โต๊ะ ${item.orders.tables.table_no}
+          🍽️ โต๊ะ ${tableMap[item.order_id] || "-"}
         </div>
         <button class="doneBtn bg-green-600 px-4 py-1 rounded">
           ✅ ทำเสร็จแล้ว
@@ -83,9 +105,9 @@ async function loadOrders(playSound = false) {
       </div>
 
       <div class="text-xl font-bold">
-        ${item.product.name}
+        ${productName}
         ${item.option_special ? "(พิเศษ)" : ""}
-        ${mixText}
+        ${mixName ? `(ผสม ${mixName})` : ""}
       </div>
 
       <div class="text-sm text-gray-300 mt-1">
@@ -96,7 +118,7 @@ async function loadOrders(playSound = false) {
     card.querySelector(".doneBtn").onclick = async () => {
       const confirm = await Swal.fire({
         title: "ยืนยันทำเสร็จแล้ว?",
-        text: `${item.product.name} x ${item.qty}`,
+        text: `${productName} x ${item.qty}`,
         icon: "question",
         showCancelButton: true,
         confirmButtonText: "เสร็จแล้ว",
@@ -153,7 +175,10 @@ sb.channel("kitchen-realtime")
 setInterval(() => loadOrders(), 3000)
 
 /* ================= INIT ================= */
-loadOrders()
+(async () => {
+  await loadProducts()
+  loadOrders()
+})()
 </script>
 
 </body>
