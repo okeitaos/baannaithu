@@ -2,12 +2,12 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>💰 คิดเงิน / ปิดบิล</title>
+<title>💰 คิดเงิน / รวมบิล</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npmsweetalert2@11"></script>
 
 <link rel="icon" href="data:,">
 </head>
@@ -24,7 +24,7 @@
 
   <!-- บิล -->
   <div class="col-span-9 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">🧾 รายการอาหาร</h2>
+    <h2 class="font-bold mb-3">🧾 รวมบิลทั้งโต๊ะ</h2>
 
     <div id="billItems" class="space-y-2 mb-4"></div>
 
@@ -33,26 +33,13 @@
         รวมทั้งหมด: <span id="totalPrice">0</span> บาท
       </div>
 
-      <!-- วิธีชำระเงิน -->
       <div class="flex gap-3">
-        <button id="cashBtn" class="bg-green-600 px-4 py-2 rounded">
-          💵 เงินสด
-        </button>
-        <button id="qrBtn" class="bg-blue-600 px-4 py-2 rounded">
-          📱 PromptPay
-        </button>
+        <button id="cashBtn" class="bg-green-600 px-4 py-2 rounded">💵 เงินสด</button>
+        <button id="qrBtn" class="bg-blue-600 px-4 py-2 rounded">📱 PromptPay</button>
       </div>
 
-      <!-- QR PromptPay -->
       <div id="qrBox" class="hidden text-center">
-        <img
-          id="qrImg"
-          class="mx-auto w-48 bg-white p-2 rounded"
-          src=""
-        />
-        <p class="text-sm text-gray-300 mt-2">
-          ให้ลูกค้าสแกนเพื่อชำระเงิน
-        </p>
+        <img id="qrImg" class="mx-auto w-48 bg-white p-2 rounded" />
       </div>
 
       <button
@@ -73,16 +60,16 @@ const sb = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
 
-// 🔧 ใส่เบอร์ PromptPay หรือเลขบัตร ปชช.
 const PROMPTPAY_ID = "0936494961"
 
 /* ================= STATE ================= */
-let currentOrder = null
+let currentTableId = null
+let currentOrders = []
 let productMap = {}
 let tableMap = {}
 let paymentMethod = null
 
-/* ================= LOAD MASTER ================= */
+/* ================= MASTER ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name,price")
   ;(data || []).forEach(p => productMap[p.id] = p)
@@ -93,54 +80,65 @@ async function loadTables() {
   ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
 }
 
-/* ================= LOAD ORDERS ================= */
-async function loadOrders() {
+/* ================= LOAD TABLES WITH OPEN ORDERS ================= */
+async function loadOpenTables() {
   const { data } = await sb
     .from("orders")
-    .select("*")
+    .select("table_id")
     .neq("status", "paid")
-    .order("created_at", { ascending: true })
 
   tableList.innerHTML = ""
 
-  ;(data || []).forEach(o => {
+  const uniqueTableIds = [...new Set((data || []).map(o => o.table_id))]
+
+  uniqueTableIds.forEach(tableId => {
     const btn = document.createElement("button")
     btn.className = "w-full bg-blue-600 py-2 rounded"
-    btn.textContent = `โต๊ะ ${tableMap[o.table_id] || "-"}`
-    btn.onclick = () => loadBill(o)
+    btn.textContent = `โต๊ะ ${tableMap[tableId]}`
+    btn.onclick = () => loadBillByTable(tableId)
     tableList.appendChild(btn)
   })
 }
 
-/* ================= LOAD BILL ================= */
-async function loadBill(order) {
-  currentOrder = order
+/* ================= LOAD BILL BY TABLE ================= */
+async function loadBillByTable(tableId) {
+  currentTableId = tableId
   paymentMethod = null
-  qrBox.classList.add("hidden")
   payBtn.disabled = true
+  qrBox.classList.add("hidden")
 
-  const { data } = await sb
-    .from("order_items")
-    .select("*")
-    .eq("order_id", order.id)
+  const { data: orders } = await sb
+    .from("orders")
+    .select("id")
+    .eq("table_id", tableId)
+    .neq("status", "paid")
 
-  let total = 0
+  currentOrders = orders || []
+
   billItems.innerHTML = ""
+  let total = 0
 
-  ;(data || []).forEach(it => {
-    const p = productMap[it.product_id]
-    if (!p) return
-    const price = p.price * it.qty
-    total += price
+  for (const order of currentOrders) {
+    const { data: items } = await sb
+      .from("order_items")
+      .select("*")
+      .eq("order_id", order.id)
 
-    const div = document.createElement("div")
-    div.className = "flex justify-between border-b border-slate-700 py-1"
-    div.innerHTML = `
-      <div>${p.name} x ${it.qty}</div>
-      <div>${price} บาท</div>
-    `
-    billItems.appendChild(div)
-  })
+    ;(items || []).forEach(it => {
+      const p = productMap[it.product_id]
+      if (!p) return
+      const price = p.price * it.qty
+      total += price
+
+      const div = document.createElement("div")
+      div.className = "flex justify-between border-b border-slate-700 py-1"
+      div.innerHTML = `
+        <div>${p.name} x ${it.qty}</div>
+        <div>${price} บาท</div>
+      `
+      billItems.appendChild(div)
+    })
+  }
 
   totalPrice.textContent = total
 }
@@ -154,62 +152,56 @@ cashBtn.onclick = () => {
 
 qrBtn.onclick = () => {
   paymentMethod = "promptpay"
+  qrImg.src = `https://promptpay.io/${PROMPTPAY_ID}/${totalPrice.textContent}.png`
   qrBox.classList.remove("hidden")
-
-  // ใช้ API สร้าง QR PromptPay
-  qrImg.src =
-    `https://promptpay.io/${PROMPTPAY_ID}/${totalPrice.textContent}.png`
-
   payBtn.disabled = false
 }
 
-/* ================= CONFIRM PAY ================= */
+/* ================= PAY ================= */
 payBtn.onclick = async () => {
-  if (!currentOrder || !paymentMethod) return
+  if (!currentTableId || !paymentMethod) return
 
   const confirm = await Swal.fire({
-    title: "ยืนยันการชำระเงิน?",
-    text: paymentMethod === "cash"
-      ? "เงินสด"
-      : "PromptPay",
+    title: "ยืนยันชำระเงินทั้งโต๊ะ?",
     icon: "question",
     showCancelButton: true,
-    confirmButtonText: "ยืนยัน",
+    confirmButtonText: "ชำระเงิน",
     cancelButtonText: "ยกเลิก"
   })
 
   if (!confirm.isConfirmed) return
 
-  // ปิดบิล
+  // 1) ปิด order ทั้งหมดของโต๊ะนี้
   await sb.from("orders")
     .update({
       status: "paid",
       payment_method: paymentMethod,
       paid_at: new Date()
     })
-    .eq("id", currentOrder.id)
+    .eq("table_id", currentTableId)
+    .neq("status", "paid")
 
-  // คืนโต๊ะ
+  // 2) คืนโต๊ะ
   await sb.from("tables")
     .update({ status: "available" })
-    .eq("id", currentOrder.table_id)
+    .eq("id", currentTableId)
 
-  Swal.fire("สำเร็จ", "ชำระเงินเรียบร้อย", "success")
+  Swal.fire("สำเร็จ", "ปิดบิลเรียบร้อย", "success")
 
-  currentOrder = null
+  currentTableId = null
   billItems.innerHTML = ""
   totalPrice.textContent = 0
   payBtn.disabled = true
   qrBox.classList.add("hidden")
 
-  loadOrders()
+  loadOpenTables()
 }
 
 /* ================= INIT ================= */
 ;(async () => {
   await loadProducts()
   await loadTables()
-  await loadOrders()
+  await loadOpenTables()
 })()
 </script>
 
