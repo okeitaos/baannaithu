@@ -13,13 +13,13 @@
 
 <div class="grid grid-cols-12 gap-4 max-w-7xl mx-auto">
 
-  <!-- TABLES -->
+  <!-- ================= TABLES ================= -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">🪑 โต๊ะว่าง</h2>
+    <h2 class="font-bold mb-3">🪑 โต๊ะ</h2>
     <div id="tableList" class="grid grid-cols-2 gap-2"></div>
   </div>
 
-  <!-- MENU -->
+  <!-- ================= MENU ================= -->
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
@@ -32,7 +32,7 @@
     <div id="menuList" class="space-y-2"></div>
   </div>
 
-  <!-- ORDER -->
+  <!-- ================= ORDER ================= -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">
       🧾 โต๊ะ <span id="currentTable">-</span>
@@ -64,24 +64,16 @@ const sb = supabase.createClient(
 
 /* ================= STATE ================= */
 let currentCategory = 'ขนมจีน'
-let currentOrderId = null
-let currentTableId = null
-let noodleMenus = []
 
+let selectedTable = null
+let currentOrderId = null
+
+let noodleMenus = []
 const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
 
 /* ================= CATEGORY ================= */
 function setCategory(cat) {
   currentCategory = cat
-
-  document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-slate-600"
-  document.getElementById("btn-drink").className  = "px-3 py-1 rounded bg-slate-600"
-  document.getElementById("btn-snack").className  = "px-3 py-1 rounded bg-slate-600"
-
-  if (cat === 'ขนมจีน') document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-orange-600"
-  if (cat === 'เครื่องดื่ม') document.getElementById("btn-drink").className = "px-3 py-1 rounded bg-blue-600"
-  if (cat === 'ทานเล่น') document.getElementById("btn-snack").className = "px-3 py-1 rounded bg-green-600"
-
   loadMenu()
 }
 
@@ -90,35 +82,46 @@ async function loadTables() {
   const { data } = await sb
     .from("tables")
     .select("*")
-    .eq("status", "available")
     .order("table_no")
 
   tableList.innerHTML = ""
+
   ;(data || []).forEach(t => {
     const btn = document.createElement("button")
-    btn.className = "bg-green-600 rounded p-2"
+
+    let cls = "p-2 rounded font-bold "
+    if (selectedTable?.id === t.id) cls += "bg-yellow-500"
+    else if (t.status === 'occupied') cls += "bg-red-600"
+    else cls += "bg-green-600"
+
+    btn.className = cls
     btn.textContent = "โต๊ะ " + t.table_no
-    btn.onclick = () => openTable(t)
+    btn.onclick = () => selectTable(t)
+
     tableList.appendChild(btn)
   })
 }
 
-async function openTable(t) {
-  const { data: order } = await sb
-    .from("orders")
-    .insert({ table_id: t.id })
-    .select()
-    .single()
+async function selectTable(t) {
+  // ถ้าเลือกโต๊ะใหม่ ขณะยังไม่คิดเงิน
+  if (selectedTable && selectedTable.id !== t.id && currentOrderId) {
+    alert("❌ ต้องคิดเงินโต๊ะเดิมก่อน")
+    return
+  }
 
-  await sb.from("tables")
-    .update({ status: "occupied", current_order_id: order.id })
-    .eq("id", t.id)
-
-  currentOrderId = order.id
-  currentTableId = t.id
+  selectedTable = t
   currentTable.textContent = t.table_no
 
-  loadOrderItems()
+  // ถ้าโต๊ะมี order อยู่แล้ว → ดึง order เดิม
+  if (t.status === 'occupied' && t.current_order_id) {
+    currentOrderId = t.current_order_id
+    loadOrderItems()
+  } else {
+    currentOrderId = null
+    orderItems.innerHTML = ""
+    totalPrice.textContent = "0 ฿"
+  }
+
   loadTables()
 }
 
@@ -195,6 +198,56 @@ async function loadMenu() {
   })
 }
 
+/* ================= ORDER ================= */
+async function addItem(id, base, name) {
+  if (!selectedTable) {
+    alert("กรุณาเลือกโต๊ะก่อน")
+    return
+  }
+
+  // ถ้ายังไม่มี order → สร้างครั้งแรก
+  if (!currentOrderId) {
+    const { data: order } = await sb
+      .from("orders")
+      .insert({ table_id: selectedTable.id })
+      .select()
+      .single()
+
+    await sb.from("tables")
+      .update({
+        status: "occupied",
+        current_order_id: order.id
+      })
+      .eq("id", selectedTable.id)
+
+    currentOrderId = order.id
+    loadTables()
+  }
+
+  const sp = document.getElementById("sp_" + id)?.checked || false
+  const mixId = document.getElementById("mix_" + id)?.value || null
+
+  if (mixId && mixId === id) {
+    alert("❌ ไม่สามารถผสมกับตัวเองได้")
+    return
+  }
+
+  let price = base
+  if (sp) price += 10
+  if (mixId) price += 10
+
+  await sb.from("order_items").insert({
+    order_id: currentOrderId,
+    product_id: id,
+    price,
+    option_special: sp,
+    option_mix: !!mixId,
+    mix_sauce_id: mixId
+  })
+
+  loadOrderItems()
+}
+
 /* ================= ORDER ITEMS ================= */
 async function loadOrderItems() {
   if (!currentOrderId) {
@@ -203,7 +256,7 @@ async function loadOrderItems() {
     return
   }
 
-  const { data, error } = await sb
+  const { data } = await sb
     .from("order_items")
     .select(`
       price,
@@ -214,16 +267,10 @@ async function loadOrderItems() {
     `)
     .eq("order_id", currentOrderId)
 
-  if (error || !Array.isArray(data)) {
-    orderItems.innerHTML = ""
-    totalPrice.textContent = "0 ฿"
-    return
-  }
-
   let total = 0
   orderItems.innerHTML = ""
 
-  data.forEach(i => {
+  ;(data || []).forEach(i => {
     total += i.price
     const div = document.createElement("div")
     div.className = "bg-slate-700 p-2 rounded text-sm"
@@ -252,8 +299,11 @@ async function payOrder() {
     .eq("id", currentOrderId)
 
   await sb.from("tables")
-    .update({ status: "available", current_order_id: null })
-    .eq("id", currentTableId)
+    .update({
+      status: "available",
+      current_order_id: null
+    })
+    .eq("id", selectedTable.id)
 
   alert("ชำระเงินเรียบร้อย")
   location.reload()
@@ -262,20 +312,12 @@ async function payOrder() {
 /* ================= REALTIME ================= */
 sb.channel("pos")
   .on("postgres_changes",
-    { event: "*", schema: "public", table: "order_items" },
-    loadOrderItems
-  )
-  .on("postgres_changes",
     { event: "*", schema: "public", table: "tables" },
     loadTables
   )
   .subscribe()
 
 /* ================= INIT ================= */
-document.getElementById("btn-noodle").onclick = () => setCategory('ขนมจีน')
-document.getElementById("btn-drink").onclick  = () => setCategory('เครื่องดื่ม')
-document.getElementById("btn-snack").onclick  = () => setCategory('ทานเล่น')
-
 loadTables()
 loadMenu()
 </script>
