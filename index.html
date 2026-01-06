@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>🍜 POS ร้านขนมจีน</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -22,13 +22,18 @@ select,input{ color:#000 !important }
 
 <h1 class="text-xl font-bold text-center">🍜 POS ร้านขนมจีน</h1>
 
+<!-- เลือกโต๊ะ -->
 <select id="tableSelect" class="w-full p-2 rounded">
   <option value="">-- เลือกโต๊ะ --</option>
 </select>
 
+<!-- หมวด -->
 <div id="categoryBar" class="flex gap-2 overflow-x-auto"></div>
+
+<!-- เมนู -->
 <div id="menu" class="grid grid-cols-2 gap-2"></div>
 
+<!-- บิล -->
 <div class="bg-slate-800 p-3 rounded">
   <div id="bill"></div>
   <div class="border-t mt-2 pt-2 font-bold">
@@ -36,6 +41,7 @@ select,input{ color:#000 !important }
   </div>
 </div>
 
+<!-- ชำระเงิน -->
 <div class="flex gap-2">
   <button onclick="openPay('cash')" class="flex-1 bg-emerald-600 py-3 rounded">💵 เงินสด</button>
   <button onclick="openPay('promptpay')" class="flex-1 bg-indigo-600 py-3 rounded">📲 พร้อมเพย์</button>
@@ -45,7 +51,7 @@ select,input{ color:#000 !important }
   ❌ ยกเลิกบิล
 </button>
 
-<!-- ADDON -->
+<!-- ===== MODAL ADDON ===== -->
 <div id="addonModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
   <div class="bg-slate-800 p-4 rounded w-80">
     <h2 id="addonTitle" class="font-bold mb-2 text-center"></h2>
@@ -68,7 +74,7 @@ select,input{ color:#000 !important }
   </div>
 </div>
 
-<!-- PAY -->
+<!-- ===== MODAL PAY ===== -->
 <div id="payModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
   <div class="bg-slate-800 p-4 rounded w-80 text-center">
     <h2 id="payTitle" class="font-bold mb-2"></h2>
@@ -96,17 +102,20 @@ select,input{ color:#000 !important }
 </div>
 
 <script>
+/* ================= CONFIG ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
 const PROMPTPAY_ID = "0869525072";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* ================= STATE ================= */
 let categories=[], products=[], tables=[];
 let currentTable=null;
 let currentOrder=null;
 let cart=[];
 let currentProduct=null;
 
+/* ================= INIT ================= */
 async function init(){
   categories=(await db.from('categories').select('*')).data||[];
   products=(await db.from('products').select('*').eq('active',true)).data||[];
@@ -115,6 +124,7 @@ async function init(){
   loadTables();
 }
 
+/* ================= TABLE ================= */
 function loadTables(){
   tableSelect.innerHTML='<option value="">-- เลือกโต๊ะ --</option>';
   tables.forEach(t=>{
@@ -146,6 +156,7 @@ tableSelect.onchange = async ()=>{
   }
 };
 
+/* ================= CATEGORY ================= */
 function renderCategories(){
   categoryBar.innerHTML='';
   categories.forEach(c=>{
@@ -169,8 +180,10 @@ function loadCategory(cat){
   });
 }
 
+/* ================= ADD ITEM ================= */
 function addItem(p){
-  if(!currentOrder){ Swal.fire('เลือกโต๊ะก่อน'); return; }
+  if(!currentOrder){ Swal.fire('กรุณาเลือกโต๊ะ'); return; }
+
   if(p.category==='ขนมจีน'){
     currentProduct=p;
     addonTitle.innerText=p.name;
@@ -178,9 +191,11 @@ function addItem(p){
     addonModal.classList.replace('hidden','flex');
     return;
   }
+
   addToCart(p.name,p.price);
 }
 
+/* ===== ADDON ===== */
 function buildMix(main){
   mixSelect.innerHTML='<option value="">-- เลือกน้ำ --</option>';
   products.filter(p=>p.category==='ขนมจีน'&&p.name!==main)
@@ -212,9 +227,23 @@ function closeAddon(){
   mixSelect.classList.add('hidden');
 }
 
-function addToCart(name,price){
-  const f=cart.find(i=>i.name===name);
-  f?f.qty++:cart.push({name,price,qty:1});
+/* ================= CART / SEND TO KITCHEN ================= */
+async function addToCart(name,price){
+  const found=cart.find(i=>i.name===name);
+  if(found){
+    found.qty++;
+  }else{
+    const item={name,price,qty:1};
+    cart.push(item);
+
+    // 🔥 ส่งเข้าครัวทันที
+    await db.from('order_items').insert({
+      order_id: currentOrder.id,
+      product_name: item.name,
+      price: item.price,
+      qty: item.qty
+    });
+  }
   renderBill();
 }
 
@@ -236,17 +265,23 @@ async function loadBill(){
   cart=[];
   const { data } = await db.from('order_items')
     .select('*').eq('order_id',currentOrder.id);
-  data.forEach(i=>cart.push({name:i.product_name,price:i.price,qty:i.qty}));
+
+  data.forEach(i=>{
+    cart.push({name:i.product_name,price:i.price,qty:i.qty});
+  });
   renderBill();
 }
 
+/* ================= PAYMENT ================= */
 function openPay(type){
   if(!cart.length){ Swal.fire('ยังไม่มีรายการ'); return; }
   payModal.classList.replace('hidden','flex');
   const sum=cart.reduce((s,i)=>s+i.price*i.qty,0);
   payTitle.innerText=`รวม ${sum} บาท`;
+
   cashBox.classList.add('hidden');
   ppBox.classList.add('hidden');
+
   if(type==='cash') cashBox.classList.remove('hidden');
   else{
     ppBox.classList.remove('hidden');
@@ -261,21 +296,20 @@ function calcChange(){
 
 async function confirmPay(type){
   const sum=cart.reduce((s,i)=>s+i.price*i.qty,0);
-  for(const i of cart){
-    await db.from('order_items').insert({
-      order_id:currentOrder.id,
-      product_name:i.name,
-      price:i.price,
-      qty:i.qty
-    });
-  }
+
   await db.from('orders').update({
-    status:'paid', payment:type, total:sum
+    status:'paid',
+    payment:type,
+    total:sum
   }).eq('id',currentOrder.id);
 
   await db.from('tables').update({status:'available'}).eq('id',currentTable);
-  cart=[]; currentOrder=null;
-  renderBill(); closePay();
+
+  cart=[];
+  currentOrder=null;
+  renderBill();
+  closePay();
+
   Swal.fire('ชำระเงินเรียบร้อย');
 }
 
@@ -283,14 +317,19 @@ function closePay(){
   payModal.classList.replace('flex','hidden');
 }
 
+/* ================= CANCEL ================= */
 async function cancelOrder(){
   if(!currentOrder) return;
   const r=await Swal.fire({title:'ยกเลิกบิล?',showCancelButton:true});
   if(!r.isConfirmed) return;
+
   await db.from('order_items').delete().eq('order_id',currentOrder.id);
   await db.from('orders').delete().eq('id',currentOrder.id);
   await db.from('tables').update({status:'available'}).eq('id',currentTable);
-  cart=[]; currentOrder=null; renderBill();
+
+  cart=[];
+  currentOrder=null;
+  renderBill();
 }
 
 init();
