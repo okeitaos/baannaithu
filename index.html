@@ -10,11 +10,8 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-body{
-  background:#020617;
-  color:#e5e7eb;
-}
-select,input{ color:#000 }
+body{background:#020617;color:#e5e7eb}
+select,input{color:#000}
 </style>
 </head>
 
@@ -35,120 +32,118 @@ select,input{ color:#000 }
 </div>
 
 <div class="flex gap-2">
-  <button onclick="sendToKitchen()" class="flex-1 bg-sky-600 py-3 rounded">
-    🍳 ส่งเข้าครัว
-  </button>
-  <button onclick="checkout()" class="flex-1 bg-emerald-600 py-3 rounded">
-    💰 เช็คบิล / จ่ายเงิน
-  </button>
+  <button id="btnKitchen" class="flex-1 bg-sky-600 py-3 rounded">🍳 ส่งเข้าครัว</button>
+  <button id="btnCheckout" class="flex-1 bg-emerald-600 py-3 rounded">💰 เช็คบิล</button>
 </div>
 
-<button onclick="cancelOrder()" class="w-full bg-red-600 py-2 rounded">
-  ❌ ยกเลิกบิล
-</button>
+<button id="btnCancel" class="w-full bg-red-600 py-2 rounded">❌ ยกเลิกบิล</button>
 
 <script>
+/* ================= CONFIG ================= */
 const db = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 );
 
 let categories=[], products=[], tables=[];
-let cart=[];
-let currentOrderId=null;
+let cart=[], currentOrderId=null;
+let openOrderMap={};
 
-/* ===== INIT ===== */
-init();
+/* ================= INIT ================= */
+document.addEventListener('DOMContentLoaded', init);
+
 async function init(){
   categories=(await db.from('categories').select()).data||[];
   products=(await db.from('products').select().eq('active',true)).data||[];
   tables=(await db.from('tables').select().eq('active',true)).data||[];
 
+  bindButtons();
   renderCategories();
-  loadCategory(categories[0]?.name);
   await loadTables();
+  if(categories[0]) loadCategory(categories[0].name);
 }
 
-/* ===== TABLE ===== */
+/* ================= EVENTS ================= */
+function bindButtons(){
+  document.getElementById('btnKitchen').onclick = sendToKitchen;
+  document.getElementById('btnCheckout').onclick = checkout;
+  document.getElementById('btnCancel').onclick = cancelOrder;
+  document.getElementById('tableSelect').onchange = onSelectTable;
+}
+
+/* ================= TABLE ================= */
 async function loadTables(){
   tableSelect.innerHTML='<option value="">-- เลือกโต๊ะ --</option>';
+  openOrderMap={};
 
-  const { data: openOrders } = await db
-    .from('orders')
-    .select('id,table_id')
-    .eq('status','open');
+  const { data } = await db.from('orders')
+    .select('id,table_id').eq('status','open');
 
-  const map={};
-  openOrders.forEach(o=>map[o.table_id]=o.id);
+  data.forEach(o=>openOrderMap[o.table_id]=o.id);
 
   tables.forEach(t=>{
     tableSelect.innerHTML+=`
       <option value="${t.id}">
-        ${t.name}${map[t.id]?' (ใช้งานอยู่)':''}
+        ${t.name}${openOrderMap[t.id]?' (ใช้งานอยู่)':''}
       </option>`;
   });
-
-  tableSelect.onchange=()=>selectTable(map);
 }
 
-async function selectTable(map){
+async function onSelectTable(){
   const tableId=tableSelect.value;
   if(!tableId) return;
 
-  if(map[tableId]){
-    currentOrderId=map[tableId];
-    const { data } = await db
-      .from('order_items')
-      .select('*')
-      .eq('order_id',currentOrderId);
+  if(openOrderMap[tableId]){
+    currentOrderId=openOrderMap[tableId];
+    const { data } = await db.from('order_items')
+      .select('*').eq('order_id',currentOrderId);
 
-    cart=data.map(i=>({
-      name:i.product_name,
-      price:i.price,
-      qty:i.qty
-    }));
+    cart=data.map(i=>({name:i.product_name,price:i.price,qty:i.qty}));
   }else{
     const { data:o } = await db.from('orders')
       .insert({table_id:tableId,status:'open'})
       .select().single();
+
     currentOrderId=o.id;
     cart=[];
   }
   renderBill();
 }
 
-/* ===== MENU ===== */
+/* ================= MENU ================= */
 function renderCategories(){
   categoryBar.innerHTML='';
   categories.forEach(c=>{
     const b=document.createElement('button');
     b.className='bg-slate-700 px-4 py-2 rounded';
-    b.innerText=c.name;
+    b.textContent=c.name;
     b.onclick=()=>loadCategory(c.name);
     categoryBar.appendChild(b);
   });
 }
+
 function loadCategory(cat){
   menu.innerHTML='';
   products.filter(p=>p.category===cat).forEach(p=>{
     const b=document.createElement('button');
     b.className='bg-slate-700 p-3 rounded';
-    b.innerText=`${p.name}\n${p.price} บาท`;
+    b.textContent=`${p.name}\n${p.price} บาท`;
     b.onclick=()=>addItem(p);
     menu.appendChild(b);
   });
 }
 
-/* ===== CART ===== */
+/* ================= CART ================= */
 function addItem(p){
   const f=cart.find(i=>i.name===p.name);
   f?f.qty++:cart.push({name:p.name,price:p.price,qty:1});
   renderBill();
 }
+
 function renderBill(){
   bill.innerHTML='';
   let sum=0;
-  cart.forEach((i,idx)=>{
+  cart.forEach(i=>{
     bill.innerHTML+=`
       <div class="flex justify-between border-b py-1">
         <span>${i.name} × ${i.qty}</span>
@@ -156,16 +151,14 @@ function renderBill(){
       </div>`;
     sum+=i.price*i.qty;
   });
-  total.innerText=sum;
+  total.textContent=sum;
 }
 
-/* ===== SEND TO KITCHEN ===== */
+/* ================= ACTIONS ================= */
 async function sendToKitchen(){
-  if(!currentOrderId || !cart.length) return;
+  if(!currentOrderId||!cart.length) return;
 
-  await db.from('order_items')
-    .delete().eq('order_id',currentOrderId);
-
+  await db.from('order_items').delete().eq('order_id',currentOrderId);
   for(const i of cart){
     await db.from('order_items').insert({
       order_id:currentOrderId,
@@ -174,36 +167,25 @@ async function sendToKitchen(){
       qty:i.qty
     });
   }
-
   Swal.fire({icon:'success',title:'ส่งเข้าครัวแล้ว',timer:1000});
 }
 
-/* ===== CHECKOUT ===== */
 async function checkout(){
   if(!currentOrderId) return;
-
   await sendToKitchen();
-  await db.from('orders')
-    .update({status:'paid'})
-    .eq('id',currentOrderId);
-
+  await db.from('orders').update({status:'paid'}).eq('id',currentOrderId);
   resetAll();
 }
 
-/* ===== CANCEL ===== */
 async function cancelOrder(){
   if(!currentOrderId) return;
-
   await db.from('order_items').delete().eq('order_id',currentOrderId);
   await db.from('orders').delete().eq('id',currentOrderId);
-
   resetAll();
 }
 
-/* ===== RESET ===== */
 async function resetAll(){
-  cart=[];
-  currentOrderId=null;
+  cart=[]; currentOrderId=null;
   renderBill();
   tableSelect.value='';
   await loadTables();
