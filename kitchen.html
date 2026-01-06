@@ -74,7 +74,7 @@ async function loadOrders(playSound = false) {
 
   const rows = data || []
 
-  // map โต๊ะจาก orders
+  // map โต๊ะ
   const orderIds = [...new Set(rows.map(r => r.order_id))]
   let tableMap = {}
 
@@ -166,26 +166,31 @@ async function loadOrders(playSound = false) {
   }
 }
 
-/* ================= REALTIME ONLY ================= */
-sb.channel("kitchen-realtime")
-  .on(
-    "postgres_changes",
-    { event: "INSERT", schema: "public", table: "order_items" },
-    payload => {
-      if (payload.new.status === "pending") {
-        loadOrders(true)
-      }
+/* ================= REALTIME (NO CHAIN) ================= */
+const channel = sb.channel("kitchen-realtime")
+
+channel.on(
+  "postgres_changes",
+  { event: "INSERT", schema: "public", table: "order_items" },
+  payload => {
+    if (payload.new.status === "pending") {
+      loadOrders(true)
     }
-  )
-  .on(
-    "postgres_changes",
-    { event: "UPDATE", schema: "public", table: "order_items" },
-    () => loadOrders()
-  )
-  .subscribe()
+  }
+)
+
+channel.on(
+  "postgres_changes",
+  { event: "UPDATE", schema: "public", table: "order_items" },
+  () => {
+    loadOrders()
+  }
+)
+
+channel.subscribe()
 
 /* ================= INIT ================= */
-(async () => {
+;(async () => {
   await loadProducts()
   loadOrders()
 })()
