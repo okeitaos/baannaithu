@@ -33,7 +33,6 @@ const ding = document.getElementById("dingSound")
 
 let knownItemIds = new Set()
 let productMap = {}
-let pollingTimer = null
 
 /* ================= LOAD PRODUCTS ================= */
 async function loadProducts() {
@@ -75,7 +74,7 @@ async function loadOrders(playSound = false) {
 
   const rows = data || []
 
-  /* map โต๊ะ */
+  // map โต๊ะจาก orders
   const orderIds = [...new Set(rows.map(r => r.order_id))]
   let tableMap = {}
 
@@ -167,7 +166,7 @@ async function loadOrders(playSound = false) {
   }
 }
 
-/* ================= REALTIME ================= */
+/* ================= REALTIME ONLY ================= */
 sb.channel("kitchen-realtime")
   .on(
     "postgres_changes",
@@ -184,11 +183,6 @@ sb.channel("kitchen-realtime")
     () => loadOrders()
   )
   .subscribe()
-
-/* ================= POLLING (SAFE) ================= */
-pollingTimer = window.setInterval(() => {
-  loadOrders()
-}, 3000)
 
 /* ================= INIT ================= */
 (async () => {
