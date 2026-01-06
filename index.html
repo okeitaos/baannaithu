@@ -34,7 +34,10 @@
 
   <!-- ORDER -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">🧾 โต๊ะ <span id="currentTable">-</span></h2>
+    <h2 class="font-bold mb-3">
+      🧾 โต๊ะ <span id="currentTable">-</span>
+    </h2>
+
     <div id="orderItems" class="space-y-2 mb-3"></div>
 
     <div class="border-t pt-3">
@@ -59,7 +62,9 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 
 /* ================= STATE ================= */
 let currentCategory = 'ขนมจีน'
-let selectedTable = null
+
+let selectedTableId = null
+let selectedTableNo = null
 let currentOrderId = null
 
 let noodleMenus = []
@@ -68,15 +73,6 @@ const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
 /* ================= CATEGORY ================= */
 function setCategory(cat) {
   currentCategory = cat
-
-  btnNoodle.className = "px-3 py-1 rounded bg-slate-600"
-  btnDrink.className  = "px-3 py-1 rounded bg-slate-600"
-  btnSnack.className  = "px-3 py-1 rounded bg-slate-600"
-
-  if (cat === 'ขนมจีน') btnNoodle.className = "px-3 py-1 rounded bg-orange-600"
-  if (cat === 'เครื่องดื่ม') btnDrink.className = "px-3 py-1 rounded bg-blue-600"
-  if (cat === 'ทานเล่น') btnSnack.className = "px-3 py-1 rounded bg-green-600"
-
   loadMenu()
 }
 
@@ -87,26 +83,31 @@ async function loadTables() {
 
   ;(data || []).forEach(t => {
     const btn = document.createElement("button")
-    btn.textContent = "โต๊ะ " + t.table_no
 
     let cls = "p-2 rounded font-bold "
-    if (selectedTable?.id === t.id) cls += "bg-yellow-500"
+    if (selectedTableId === t.id) cls += "bg-yellow-500"
     else if (t.status === 'occupied') cls += "bg-red-600"
     else cls += "bg-green-600"
 
     btn.className = cls
-    btn.addEventListener("click", () => selectTable(t))
+    btn.textContent = "โต๊ะ " + t.table_no
+
+    btn.addEventListener("click", () => {
+      selectTable(t)
+    })
+
     tableList.appendChild(btn)
   })
 }
 
 function selectTable(t) {
-  if (selectedTable && currentOrderId && selectedTable.id !== t.id) {
+  if (currentOrderId && selectedTableId !== t.id) {
     alert("❌ ต้องคิดเงินโต๊ะเดิมก่อน")
     return
   }
 
-  selectedTable = t
+  selectedTableId = t.id
+  selectedTableNo = t.table_no
   currentTable.textContent = t.table_no
 
   if (t.status === 'occupied' && t.current_order_id) {
@@ -185,8 +186,9 @@ async function loadMenu() {
       <div class="mt-2">${options}</div>
     `
 
-    div.querySelector(".add-btn")
-      .addEventListener("click", () => addItem(p))
+    div.querySelector(".add-btn").addEventListener("click", () => {
+      addItem(p)
+    })
 
     menuList.appendChild(div)
   })
@@ -194,21 +196,24 @@ async function loadMenu() {
 
 /* ================= ORDER ================= */
 async function addItem(p) {
-  if (!selectedTable) {
-    alert("กรุณาเลือกโต๊ะก่อน")
+  if (!selectedTableId) {
+    alert("❌ กรุณาเลือกโต๊ะก่อน")
     return
   }
 
   if (!currentOrderId) {
     const { data: order } = await sb
       .from("orders")
-      .insert({ table_id: selectedTable.id })
+      .insert({ table_id: selectedTableId })
       .select()
       .single()
 
     await sb.from("tables")
-      .update({ status: "occupied", current_order_id: order.id })
-      .eq("id", selectedTable.id)
+      .update({
+        status: "occupied",
+        current_order_id: order.id
+      })
+      .eq("id", selectedTableId)
 
     currentOrderId = order.id
     loadTables()
@@ -249,7 +254,9 @@ async function loadOrderItems() {
     total += i.price
     const d = document.createElement("div")
     d.className = "bg-slate-700 p-2 rounded text-sm"
-    d.textContent = i.products.name + (i.mix ? ` (ผสม ${i.mix.name})` : "")
+    d.textContent =
+      i.products.name +
+      (i.mix ? ` (ผสม ${i.mix.name})` : "")
     orderItems.appendChild(d)
   })
 
@@ -260,23 +267,25 @@ async function loadOrderItems() {
 payBtn.addEventListener("click", async () => {
   if (!currentOrderId) return
 
-  await sb.from("orders").update({ status: "paid" }).eq("id", currentOrderId)
+  await sb.from("orders")
+    .update({ status: "paid" })
+    .eq("id", currentOrderId)
+
   await sb.from("tables")
-    .update({ status: "available", current_order_id: null })
-    .eq("id", selectedTable.id)
+    .update({
+      status: "available",
+      current_order_id: null
+    })
+    .eq("id", selectedTableId)
 
   alert("ชำระเงินเรียบร้อย")
   location.reload()
 })
 
 /* ================= INIT ================= */
-const btnNoodle = document.getElementById("btn-noodle")
-const btnDrink  = document.getElementById("btn-drink")
-const btnSnack  = document.getElementById("btn-snack")
-
-btnNoodle.addEventListener("click", () => setCategory('ขนมจีน'))
-btnDrink.addEventListener("click", () => setCategory('เครื่องดื่ม'))
-btnSnack.addEventListener("click", () => setCategory('ทานเล่น'))
+document.getElementById("btn-noodle").addEventListener("click", () => setCategory('ขนมจีน'))
+document.getElementById("btn-drink").addEventListener("click", () => setCategory('เครื่องดื่ม'))
+document.getElementById("btn-snack").addEventListener("click", () => setCategory('ทานเล่น'))
 
 loadTables()
 loadMenu()
