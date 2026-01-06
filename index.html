@@ -73,7 +73,7 @@ let cart = []
 
 const restrictedMixTargets = ["แกงปู", "น้ำชุบหยำ"]
 
-/* ================= LOAD TABLES ================= */
+/* ================= TABLES ================= */
 async function loadTables() {
   const { data } = await sb.from("tables").select("*").order("table_no")
   tableList.innerHTML = ""
@@ -106,13 +106,13 @@ async function loadMenu() {
     const card = document.createElement("div")
     card.className = "bg-slate-700 p-3 rounded"
 
-    let optionsHTML = ""
+    let options = ""
     if (p.category === "ขนมจีน") {
       const mixOptions = noodleMenus.filter(n =>
         n.name !== p.name && !restrictedMixTargets.includes(n.name)
       )
 
-      optionsHTML = `
+      options = `
         <label class="block text-sm">
           <input type="checkbox" class="sp"> พิเศษ (+10)
         </label>
@@ -134,7 +134,7 @@ async function loadMenu() {
         </div>
         <button class="bg-blue-600 px-4 rounded">เพิ่ม</button>
       </div>
-      ${optionsHTML}
+      ${options}
     `
 
     card.querySelector("button").onclick = () => {
@@ -158,16 +158,14 @@ async function loadMenu() {
   })
 }
 
-/* ================= CART LOGIC ================= */
+/* ================= CART ================= */
 function addToCart(item) {
   const key = `${item.product_id}_${item.option_special}_${item.mix_sauce_id || ""}`
   const found = cart.find(i => i.key === key)
 
-  if (found) {
-    found.qty += 1
-  } else {
-    cart.push({ ...item, qty: 1, key })
-  }
+  if (found) found.qty++
+  else cart.push({ ...item, qty: 1, key })
+
   renderCart()
 }
 
@@ -190,26 +188,22 @@ function renderCart() {
         ${item.name}
         ${item.option_special ? "(พิเศษ)" : ""}
         ${mixName ? `(ผสม ${mixName})` : ""}
-        <div class="text-sm text-gray-300">
-          ${item.price} บาท / ที่
-        </div>
+        <div class="text-sm text-gray-300">${item.price} บาท / ที่</div>
       </div>
       <div class="flex items-center gap-2">
-        <button class="px-2 bg-slate-600">-</button>
+        <button class="btn-minus px-2 bg-slate-600">-</button>
         <span>${item.qty}</span>
-        <button class="px-2 bg-slate-600">+</button>
+        <button class="btn-plus px-2 bg-slate-600">+</button>
       </div>
     `
 
-    const [btnMinus, , btnPlus] = div.querySelectorAll("button")
-
-    btnMinus.onclick = () => {
+    div.querySelector(".btn-minus").onclick = () => {
       item.qty--
       if (item.qty <= 0) cart.splice(index, 1)
       renderCart()
     }
 
-    btnPlus.onclick = () => {
+    div.querySelector(".btn-plus").onclick = () => {
       item.qty++
       renderCart()
     }
