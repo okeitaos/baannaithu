@@ -10,11 +10,8 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-body{
-  background:#020617;
-  color:#e5e7eb;
-}
-button{ font-weight:600 }
+body{background:#020617;color:#e5e7eb}
+button{font-weight:600}
 </style>
 </head>
 
@@ -25,11 +22,11 @@ button{ font-weight:600 }
 <!-- เลือกโต๊ะ -->
 <select id="tableSelect" class="w-full p-2 text-black rounded"></select>
 
-<!-- เมนูทดสอบ -->
-<div class="grid grid-cols-2 gap-2">
-  <button onclick="addItem('ขนมจีนน้ำยา',40)" class="bg-slate-700 p-3 rounded">ขนมจีนน้ำยา</button>
-  <button onclick="addItem('ขนมจีนแกงเขียวหวาน',45)" class="bg-slate-700 p-3 rounded">ขนมจีนแกงเขียวหวาน</button>
-</div>
+<!-- หมวด -->
+<div id="categoryBar" class="flex gap-2 overflow-x-auto"></div>
+
+<!-- เมนู -->
+<div id="menu" class="grid grid-cols-2 gap-2"></div>
 
 <!-- บิล -->
 <div class="bg-slate-800 p-3 rounded">
@@ -53,6 +50,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ================= STATE ================= */
+let categories = [];
+let products = [];
 let tables = [];
 let cart = [];
 let currentTable = null;
@@ -60,6 +59,8 @@ let currentOrderId = null;
 
 /* ================= INIT ================= */
 async function init(){
+  await loadCategories();
+  await loadProducts();
   await loadTables();
 }
 init();
@@ -82,7 +83,6 @@ tableSelect.onchange = async ()=>{
   currentTable = tableSelect.value;
   cart = [];
 
-  // หา order ค้าง
   const { data: order } = await db
     .from('orders')
     .select('*')
@@ -103,7 +103,6 @@ tableSelect.onchange = async ()=>{
       qty:i.qty
     }));
   }else{
-    // เปิดโต๊ะใหม่
     const { data:newOrder } = await db.from('orders')
       .insert({ table_id:currentTable, status:'open', total:0 })
       .select().single();
@@ -116,32 +115,75 @@ tableSelect.onchange = async ()=>{
   loadTables();
 };
 
+/* ================= CATEGORY ================= */
+async function loadCategories(){
+  const { data } = await db.from('categories').select('*').order('name');
+  categories = data || [];
+  renderCategories();
+}
+
+function renderCategories(){
+  categoryBar.innerHTML = '';
+  categories.forEach((c,idx)=>{
+    const b = document.createElement('button');
+    b.className = 'bg-slate-700 px-4 py-2 rounded whitespace-nowrap';
+    b.textContent = c.name;
+    b.onclick = ()=>loadMenu(c.name);
+    categoryBar.appendChild(b);
+
+    if(idx===0) loadMenu(c.name);
+  });
+}
+
+/* ================= PRODUCTS ================= */
+async function loadProducts(){
+  const { data } = await db
+    .from('products')
+    .select('*')
+    .eq('active',true);
+
+  products = data || [];
+}
+
+function loadMenu(category){
+  menu.innerHTML='';
+  products
+    .filter(p=>p.category===category)
+    .forEach(p=>{
+      const b = document.createElement('button');
+      b.className = 'bg-slate-700 p-3 rounded text-sm';
+      b.innerText = `${p.name}\n${p.price} บาท`;
+      b.onclick = ()=>addItem(p);
+      menu.appendChild(b);
+    });
+}
+
 /* ================= BILL ================= */
-function addItem(name,price){
+function addItem(p){
   if(!currentTable){
-    alert('กรุณาเลือกโต๊ะ');
+    Swal.fire('กรุณาเลือกโต๊ะ','','warning');
     return;
   }
-  const f = cart.find(i=>i.name===name);
-  f ? f.qty++ : cart.push({name,price,qty:1});
+  const f = cart.find(i=>i.name===p.name);
+  f ? f.qty++ : cart.push({name:p.name,price:p.price,qty:1});
   renderBill();
 }
 
 function renderBill(){
   bill.innerHTML='';
   let sum=0;
-  cart.forEach(i=>{
-    bill.innerHTML += `
+  cart.forEach((i,idx)=>{
+    bill.innerHTML+=`
       <div class="flex justify-between border-b py-1">
         <span>${i.name} × ${i.qty}</span>
         <span>${i.price*i.qty}</span>
       </div>`;
-    sum += i.price*i.qty;
+    sum+=i.price*i.qty;
   });
-  total.textContent = sum;
+  total.textContent=sum;
 }
 
-/* ================= SEND TO KITCHEN ================= */
+/* ================= SEND KITCHEN ================= */
 async function sendToKitchen(){
   if(!cart.length) return;
 
@@ -164,36 +206,17 @@ async function sendToKitchen(){
 
 /* ================= CHECKOUT ================= */
 async function checkout(){
-  if(!currentOrderId) return;
-
-  await db.from('orders')
-    .update({ status:'paid' })
-    .eq('id',currentOrderId);
-
-  await db.from('tables')
-    .update({ status:'free' })
-    .eq('id',currentTable);
-
+  await db.from('orders').update({ status:'paid' }).eq('id',currentOrderId);
+  await db.from('tables').update({ status:'free' }).eq('id',currentTable);
   resetAll();
   Swal.fire('เช็คบิลสำเร็จ','','success');
 }
 
 /* ================= CANCEL ================= */
 async function cancelBill(){
-  if(!currentOrderId) return;
-
-  await db.from('orders')
-    .update({ status:'cancel' })
-    .eq('id',currentOrderId);
-
-  await db.from('order_items')
-    .delete()
-    .eq('order_id',currentOrderId);
-
-  await db.from('tables')
-    .update({ status:'free' })
-    .eq('id',currentTable);
-
+  await db.from('orders').update({ status:'cancel' }).eq('id',currentOrderId);
+  await db.from('order_items').delete().eq('order_id',currentOrderId);
+  await db.from('tables').update({ status:'free' }).eq('id',currentTable);
   resetAll();
   Swal.fire('ยกเลิกบิลแล้ว','','success');
 }
