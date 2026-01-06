@@ -1,4 +1,4 @@
-<!-- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -10,8 +10,11 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
-body{background:#020617;color:#e5e7eb}
-select,input{color:#000}
+body{
+  background:#020617;
+  color:#e5e7eb;
+}
+button{ font-weight:600 }
 </style>
 </head>
 
@@ -19,124 +22,108 @@ select,input{color:#000}
 
 <h1 class="text-xl font-bold text-center">🍜 POS ร้านขนมจีน</h1>
 
-<select id="tableSelect" class="w-full p-2 rounded"></select>
+<!-- เลือกโต๊ะ -->
+<select id="tableSelect" class="w-full p-2 text-black rounded"></select>
 
-<div id="categoryBar" class="flex gap-2 overflow-x-auto"></div>
-<div id="menu" class="grid grid-cols-2 gap-2"></div>
+<!-- เมนูทดสอบ -->
+<div class="grid grid-cols-2 gap-2">
+  <button onclick="addItem('ขนมจีนน้ำยา',40)" class="bg-slate-700 p-3 rounded">ขนมจีนน้ำยา</button>
+  <button onclick="addItem('ขนมจีนแกงเขียวหวาน',45)" class="bg-slate-700 p-3 rounded">ขนมจีนแกงเขียวหวาน</button>
+</div>
 
+<!-- บิล -->
 <div class="bg-slate-800 p-3 rounded">
   <div id="bill"></div>
-  <div class="border-t mt-2 pt-2 font-bold">
+  <div class="border-t mt-2 pt-2 text-lg">
     รวม: <span id="total" class="text-emerald-400">0</span> บาท
   </div>
 </div>
 
-<div class="flex gap-2">
-  <button id="btnKitchen" class="flex-1 bg-sky-600 py-3 rounded">🍳 ส่งเข้าครัว</button>
-  <button id="btnCheckout" class="flex-1 bg-emerald-600 py-3 rounded">💰 เช็คบิล</button>
+<!-- ปุ่ม -->
+<div class="grid grid-cols-3 gap-2">
+  <button onclick="sendToKitchen()" class="bg-indigo-600 py-2 rounded">👨‍🍳 ส่งครัว</button>
+  <button onclick="checkout()" class="bg-emerald-600 py-2 rounded">💰 เช็คบิล</button>
+  <button onclick="cancelBill()" class="bg-red-600 py-2 rounded">❌ ยกเลิก</button>
 </div>
-
-<button id="btnCancel" class="w-full bg-red-600 py-2 rounded">❌ ยกเลิกบิล</button>
 
 <script>
 /* ================= CONFIG ================= */
-const db = supabase.createClient(
-  "https://nvsptbbvxjulrpdebrhn.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
-);
+const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let categories=[], products=[], tables=[];
-let cart=[], currentOrderId=null;
-let openOrderMap={};
+/* ================= STATE ================= */
+let tables = [];
+let cart = [];
+let currentTable = null;
+let currentOrderId = null;
 
 /* ================= INIT ================= */
-document.addEventListener('DOMContentLoaded', init);
-
 async function init(){
-  categories=(await db.from('categories').select()).data||[];
-  products=(await db.from('products').select().eq('active',true)).data||[];
-  tables=(await db.from('tables').select().eq('active',true)).data||[];
-
-  bindButtons();
-  renderCategories();
   await loadTables();
-  if(categories[0]) loadCategory(categories[0].name);
 }
-
-/* ================= EVENTS ================= */
-function bindButtons(){
-  document.getElementById('btnKitchen').onclick = sendToKitchen;
-  document.getElementById('btnCheckout').onclick = checkout;
-  document.getElementById('btnCancel').onclick = cancelOrder;
-  document.getElementById('tableSelect').onchange = onSelectTable;
-}
+init();
 
 /* ================= TABLE ================= */
 async function loadTables(){
-  tableSelect.innerHTML='<option value="">-- เลือกโต๊ะ --</option>';
-  openOrderMap={};
+  const { data } = await db.from('tables').select('*').order('name');
+  tables = data || [];
 
-  const { data } = await db.from('orders')
-    .select('id,table_id').eq('status','open');
-
-  data.forEach(o=>openOrderMap[o.table_id]=o.id);
-
+  tableSelect.innerHTML = '<option value="">-- เลือกโต๊ะ --</option>';
   tables.forEach(t=>{
-    tableSelect.innerHTML+=`
-      <option value="${t.id}">
-        ${t.name}${openOrderMap[t.id]?' (ใช้งานอยู่)':''}
-      </option>`;
+    const icon = t.status === 'busy' ? '🔴' : '🟢';
+    tableSelect.innerHTML += `<option value="${t.id}">${icon} ${t.name}</option>`;
   });
 }
 
-async function onSelectTable(){
-  const tableId=tableSelect.value;
-  if(!tableId) return;
+tableSelect.onchange = async ()=>{
+  if(!tableSelect.value) return;
 
-  if(openOrderMap[tableId]){
-    currentOrderId=openOrderMap[tableId];
-    const { data } = await db.from('order_items')
-      .select('*').eq('order_id',currentOrderId);
+  currentTable = tableSelect.value;
+  cart = [];
 
-    cart=data.map(i=>({name:i.product_name,price:i.price,qty:i.qty}));
+  // หา order ค้าง
+  const { data: order } = await db
+    .from('orders')
+    .select('*')
+    .eq('table_id', currentTable)
+    .eq('status','open')
+    .single();
+
+  if(order){
+    currentOrderId = order.id;
+    const { data: items } = await db
+      .from('order_items')
+      .select('*')
+      .eq('order_id', order.id);
+
+    cart = items.map(i=>({
+      name:i.product_name,
+      price:i.price,
+      qty:i.qty
+    }));
   }else{
-    const { data:o } = await db.from('orders')
-      .insert({table_id:tableId,status:'open'})
+    // เปิดโต๊ะใหม่
+    const { data:newOrder } = await db.from('orders')
+      .insert({ table_id:currentTable, status:'open', total:0 })
       .select().single();
 
-    currentOrderId=o.id;
-    cart=[];
+    currentOrderId = newOrder.id;
+    await db.from('tables').update({ status:'busy' }).eq('id',currentTable);
   }
+
   renderBill();
-}
+  loadTables();
+};
 
-/* ================= MENU ================= */
-function renderCategories(){
-  categoryBar.innerHTML='';
-  categories.forEach(c=>{
-    const b=document.createElement('button');
-    b.className='bg-slate-700 px-4 py-2 rounded';
-    b.textContent=c.name;
-    b.onclick=()=>loadCategory(c.name);
-    categoryBar.appendChild(b);
-  });
-}
-
-function loadCategory(cat){
-  menu.innerHTML='';
-  products.filter(p=>p.category===cat).forEach(p=>{
-    const b=document.createElement('button');
-    b.className='bg-slate-700 p-3 rounded';
-    b.textContent=`${p.name}\n${p.price} บาท`;
-    b.onclick=()=>addItem(p);
-    menu.appendChild(b);
-  });
-}
-
-/* ================= CART ================= */
-function addItem(p){
-  const f=cart.find(i=>i.name===p.name);
-  f?f.qty++:cart.push({name:p.name,price:p.price,qty:1});
+/* ================= BILL ================= */
+function addItem(name,price){
+  if(!currentTable){
+    alert('กรุณาเลือกโต๊ะ');
+    return;
+  }
+  const f = cart.find(i=>i.name===name);
+  f ? f.qty++ : cart.push({name,price,qty:1});
   renderBill();
 }
 
@@ -144,21 +131,22 @@ function renderBill(){
   bill.innerHTML='';
   let sum=0;
   cart.forEach(i=>{
-    bill.innerHTML+=`
+    bill.innerHTML += `
       <div class="flex justify-between border-b py-1">
         <span>${i.name} × ${i.qty}</span>
         <span>${i.price*i.qty}</span>
       </div>`;
-    sum+=i.price*i.qty;
+    sum += i.price*i.qty;
   });
-  total.textContent=sum;
+  total.textContent = sum;
 }
 
-/* ================= ACTIONS ================= */
+/* ================= SEND TO KITCHEN ================= */
 async function sendToKitchen(){
-  if(!currentOrderId||!cart.length) return;
+  if(!cart.length) return;
 
   await db.from('order_items').delete().eq('order_id',currentOrderId);
+
   for(const i of cart){
     await db.from('order_items').insert({
       order_id:currentOrderId,
@@ -167,52 +155,58 @@ async function sendToKitchen(){
       qty:i.qty
     });
   }
-  Swal.fire({icon:'success',title:'ส่งเข้าครัวแล้ว',timer:1000});
+
+  const sum = cart.reduce((s,i)=>s+i.price*i.qty,0);
+  await db.from('orders').update({ total:sum }).eq('id',currentOrderId);
+
+  Swal.fire('ส่งครัวแล้ว','','success');
 }
 
+/* ================= CHECKOUT ================= */
 async function checkout(){
   if(!currentOrderId) return;
-  await sendToKitchen();
-  await db.from('orders').update({status:'paid'}).eq('id',currentOrderId);
+
+  await db.from('orders')
+    .update({ status:'paid' })
+    .eq('id',currentOrderId);
+
+  await db.from('tables')
+    .update({ status:'free' })
+    .eq('id',currentTable);
+
   resetAll();
+  Swal.fire('เช็คบิลสำเร็จ','','success');
 }
 
-async function cancelOrder(){
+/* ================= CANCEL ================= */
+async function cancelBill(){
   if(!currentOrderId) return;
-  await db.from('order_items').delete().eq('order_id',currentOrderId);
-  await db.from('orders').delete().eq('id',currentOrderId);
+
+  await db.from('orders')
+    .update({ status:'cancel' })
+    .eq('id',currentOrderId);
+
+  await db.from('order_items')
+    .delete()
+    .eq('order_id',currentOrderId);
+
+  await db.from('tables')
+    .update({ status:'free' })
+    .eq('id',currentTable);
+
   resetAll();
+  Swal.fire('ยกเลิกบิลแล้ว','','success');
 }
 
-async function resetAll(){
-  cart=[]; currentOrderId=null;
-  renderBill();
+/* ================= RESET ================= */
+function resetAll(){
+  cart=[];
+  currentOrderId=null;
+  currentTable=null;
   tableSelect.value='';
-  await loadTables();
+  renderBill();
+  loadTables();
 }
-</script>
-
-</body>
-</html> -->
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TEST BUTTON</title>
-<script src="https://cdn.tailwindcss.com"></script>
-</head>
-
-<body class="p-4 bg-slate-900 text-white">
-
-<button id="btn" class="bg-emerald-600 px-6 py-3 rounded">
-  กดฉันสิ
-</button>
-
-<script>
-document.getElementById('btn').addEventListener('click',()=>{
-  alert('ปุ่มทำงานแล้ว');
-});
 </script>
 
 </body>
