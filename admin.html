@@ -10,132 +10,27 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <style>
-  /* ===== Base ===== */
-  body {
-    background: radial-gradient(ellipse at top, #1e293b, #020617);
-    color: #e5e7eb;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+<style>
+  body{
+    background:radial-gradient(ellipse at top,#1e293b,#020617);
+    color:#e5e7eb;
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
   }
-
-  h1, h2 {
-    letter-spacing: .3px;
+  section{
+    background:linear-gradient(180deg,#0f172a,#020617);
+    border:1px solid rgba(255,255,255,.06);
+    box-shadow:0 10px 30px rgba(0,0,0,.45)
   }
-
-  /* ===== Section Card ===== */
-  section {
-    background: linear-gradient(180deg, #0f172a, #020617);
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  input,select{
+    background:#fff!important;
+    color:#000!important;
+    border:1px solid #cbd5e1
   }
-
-  /* ===== Inputs ===== */
-  input, select {
-    background: #ffffff !important;
-    color: #000000 !important;
-    border: 1px solid #cbd5e1;
-    font-size: 15px;
-  }
-
-  input::placeholder {
-    color: #94a3b8;
-  }
-
-  input:focus, select:focus {
-    outline: none;
-    border-color: #22c55e;
-    box-shadow: 0 0 0 2px rgba(34,197,94,.25);
-  }
-
-  /* ===== Buttons ===== */
-  button {
-    font-weight: 500;
-  }
-
-  button.bg-emerald-600 {
-    background: linear-gradient(135deg, #22c55e, #16a34a);
-  }
-
-  button.bg-emerald-600:hover {
-    filter: brightness(1.05);
-  }
-
-  button.text-red-400:hover {
-    color: #f87171;
-  }
-
-  /* ===== Tables ===== */
-  table {
-    border-collapse: collapse;
-    margin-top: .5rem;
-  }
-
-  thead th {
-    text-align: left;
-    font-weight: 600;
-    color: #cbd5f5;
-    padding: .4rem;
-  }
-
-  tbody tr {
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-  }
-
-  tbody tr:hover {
-    background: rgba(255,255,255,0.03);
-  }
-
-  tbody td {
-    padding: .35rem .4rem;
-    color: #e5e7eb;
-    font-size: 14px;
-  }
-
-  tbody input[type="number"] {
-    width: 80px;
-    padding: 2px 6px;
-    border-radius: 6px;
-  }
-
-  /* ===== Checkboxes ===== */
-  input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: #22c55e;
-    cursor: pointer;
-  }
-
-  /* ===== Bill list ===== */
-  #billList > div {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.05);
-    border-radius: 8px;
-    padding: 8px 10px;
-  }
-
-  #billList b {
-    color: #34d399;
-    font-weight: 600;
-  }
-
-  /* ===== Charts ===== */
-  canvas {
-    margin-top: .5rem;
-  }
-
-  /* ===== Scrollbar (desktop) ===== */
-  ::-webkit-scrollbar {
-    width: 8px;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #334155;
-    border-radius: 4px;
-  }
+  table td,table th{padding:.4rem}
 </style>
-
 </head>
 
-<body class="bg-slate-900 text-white p-4 space-y-6">
+<body class="p-4 space-y-6">
 
 <h1 class="text-2xl font-bold text-center">🛠️ Admin Dashboard</h1>
 
@@ -157,203 +52,65 @@ const Toast = Swal.mixin({
 
 /* ================= UTIL ================= */
 function thaiRange(d){
-  const s = new Date(d + 'T00:00:00+07:00');
-  const e = new Date(d + 'T23:59:59+07:00');
+  const s = new Date(d+'T00:00:00+07:00');
+  const e = new Date(d+'T23:59:59+07:00');
   return { start:s.toISOString(), end:e.toISOString() };
 }
 </script>
 
-<!-- ================= CATEGORY ================= -->
-<section class="bg-slate-800 p-4 rounded-xl space-y-3">
-  <h2 class="font-bold">🗂️ หมวดสินค้า</h2>
-  <div class="flex gap-2">
-    <input id="catName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อหมวด">
-    <button onclick="addCategory()" class="bg-emerald-600 px-4 rounded">เพิ่ม</button>
-  </div>
-  <div id="categoryList" class="space-y-1"></div>
-</section>
-
-<!-- ================= PRODUCT ================= -->
-<section class="bg-slate-800 p-4 rounded-xl space-y-3">
-  <h2 class="font-bold">🍜 สินค้า</h2>
-  <div class="grid grid-cols-3 gap-2">
-    <input id="pName" class="p-2 text-black rounded" placeholder="ชื่อสินค้า">
-    <select id="pCategory" class="p-2 text-black rounded"></select>
-    <input id="pPrice" type="number" class="p-2 text-black rounded" placeholder="ราคา">
-  </div>
-  <button onclick="addProduct()" class="bg-emerald-600 px-4 py-2 rounded">➕ เพิ่มสินค้า</button>
-
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-slate-600">
-        <th>ชื่อ</th><th>ราคา</th><th>ขาย</th><th>ลบ</th>
-      </tr>
-    </thead>
-    <tbody id="productList"></tbody>
-  </table>
-</section>
-
-<!-- ================= TABLE ================= -->
-<section class="bg-slate-800 p-4 rounded-xl space-y-3">
-  <h2 class="font-bold">🪑 โต๊ะ</h2>
-  <div class="flex gap-2">
-    <input id="tName" class="flex-1 p-2 text-black rounded" placeholder="ชื่อโต๊ะ">
-    <button onclick="addTable()" class="bg-emerald-600 px-4 rounded">เพิ่มโต๊ะ</button>
-  </div>
-  <div id="tableList" class="space-y-1"></div>
-</section>
-
 <!-- ================= BILLS ================= -->
-<section class="bg-slate-800 p-4 rounded-xl space-y-3">
+<section class="p-4 rounded-xl space-y-3">
   <h2 class="font-bold">🧾 บิลรายวัน</h2>
-  <input type="date" id="billDate" class="p-2 text-black rounded" onchange="loadBills()">
-  <div class="font-bold">รวม: <span id="dailyTotal" class="text-emerald-400">0</span> บาท</div>
-  <button onclick="exportExcel()" class="bg-emerald-600 px-3 py-1 rounded">📤 Export Excel</button>
+
+  <input type="date" id="billDate"
+    class="p-2 rounded"
+    onchange="loadBills()">
+
+  <div class="font-bold">
+    รวม: <span id="dailyTotal" class="text-emerald-400">0</span> บาท
+  </div>
+
+  <div class="flex gap-2">
+    <button onclick="exportExcel()"
+      class="bg-emerald-600 px-3 py-1 rounded">
+      📤 Export Excel
+    </button>
+
+    <button onclick="clearAllBills()"
+      class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded">
+      🧹 เคลียร์บิลทั้งหมด (วันนี้)
+    </button>
+  </div>
+
   <div id="billList" class="space-y-2 text-sm"></div>
-  <button
-  onclick="clearAllBills()"
-  class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded">
-  🧹 เคลียร์บิลทั้งหมด (วันนี้)
-</button>
-
-</section>
-
-<!-- ================= CHART ================= -->
-<section class="bg-slate-800 p-4 rounded-xl">
-  <h2 class="font-bold mb-2">📊 ยอดขายรายชั่วโมง (เวลาไทย)</h2>
-  <canvas id="salesChart"></canvas>
-</section>
-
-<section class="bg-slate-800 p-4 rounded-xl space-y-3">
-  <h2 class="font-bold">🏆 สินค้าขายดี</h2>
-  <select id="categoryFilter" class="p-2 text-black rounded" onchange="drawProductChart()">
-    <option value="">ทั้งหมด</option>
-  </select>
-  <canvas id="productChart" height="160"></canvas>
 </section>
 
 <script>
-/* ================= CATEGORY ================= */
-async function loadCategories(){
-  const { data } = await db.from('categories').select('*').order('name');
-  categoryList.innerHTML='';
-  pCategory.innerHTML='';
-  categoryFilter.innerHTML='<option value="">ทั้งหมด</option>';
-
-  data.forEach(c=>{
-    categoryList.innerHTML+=`
-      <div class="flex justify-between bg-slate-700 p-2 rounded">
-        ${c.name}
-        <button onclick="deleteCategory('${c.id}','${c.name}')">🗑</button>
-      </div>`;
-    pCategory.innerHTML+=`<option>${c.name}</option>`;
-    categoryFilter.innerHTML+=`<option value="${c.name}">${c.name}</option>`;
-  });
-}
-
-async function addCategory(){
-  if(!catName.value) return;
-  await db.from('categories').insert({ name:catName.value });
-  catName.value='';
-  Toast.fire({icon:'success',title:'เพิ่มหมวดแล้ว'});
-  loadCategories();
-}
-
-async function deleteCategory(id,name){
-  const { data } = await db.from('products').select('id').eq('category',name).limit(1);
-  if(data.length){
-    Swal.fire('ลบไม่ได้','ยังมีสินค้าใช้หมวดนี้','warning');
-    return;
-  }
-  await db.from('categories').delete().eq('id',id);
-  loadCategories();
-}
-
-/* ================= PRODUCT ================= */
-async function loadProducts(){
-  const { data } = await db.from('products').select('*').order('category');
-  productList.innerHTML='';
-  data.forEach(p=>{
-    productList.innerHTML+=`
-      <tr>
-        <td>${p.name}</td>
-        <td><input type="number" value="${p.price}" onchange="updateProductPrice('${p.id}',this.value)"></td>
-        <td><input type="checkbox" ${p.active?'checked':''} onchange="toggleProductActive('${p.id}',this.checked)"></td>
-        <td><button onclick="deleteProduct('${p.id}','${p.name}')">ลบ</button></td>
-      </tr>`;
-  });
-}
-
-async function addProduct(){
-  if(!pName.value||!pPrice.value) return;
-  await db.from('products').insert({
-    name:pName.value,
-    category:pCategory.value,
-    price:+pPrice.value,
-    active:true
-  });
-  pName.value=pPrice.value='';
-  loadProducts();
-}
-
-async function updateProductPrice(id,price){
-  await db.from('products').update({price:+price}).eq('id',id);
-}
-async function toggleProductActive(id,active){
-  await db.from('products').update({active}).eq('id',id);
-}
-async function deleteProduct(id,name){
-  const res = await Swal.fire({title:`ลบ ${name}?`,icon:'warning',showCancelButton:true});
-  if(!res.isConfirmed) return;
-  await db.from('products').delete().eq('id',id);
-  loadProducts();
-}
-
-/* ================= TABLE ================= */
-async function loadTables(){
-  const { data } = await db.from('tables').select('*').order('name');
-  tableList.innerHTML='';
-  data.forEach(t=>{
-    tableList.innerHTML+=`
-      <div class="flex justify-between bg-slate-700 p-2 rounded">
-        ${t.name}
-        <input type="checkbox" ${t.active?'checked':''} onchange="toggleTableActive('${t.id}',this.checked)">
-      </div>`;
-  });
-}
-async function addTable(){
-  if(!tName.value) return;
-  await db.from('tables').insert({name:tName.value,active:true});
-  tName.value='';
-  loadTables();
-}
-async function toggleTableActive(id,active){
-  await db.from('tables').update({active}).eq('id',id);
-}
-
-/* ================= BILLS ================= */
+/* ================= LOAD BILLS ================= */
 async function loadBills(){
   const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
 
   const { data:orders } = await db.from('orders')
     .select(`id,total,created_at,order_items!order_items_order_id_fkey(product_name,qty,price)`)
-    .gte('created_at',start).lte('created_at',end);
+    .gte('created_at',start)
+    .lte('created_at',end);
 
   billList.innerHTML='';
   let sum=0;
+
   orders.forEach(o=>{
     sum+=o.total;
     billList.innerHTML+=`
-      <div>
-        <b>${o.total}</b>
-        ${o.order_items.map(i=>`<div>- ${i.product_name} × ${i.qty}</div>`).join('')}
+      <div class="border p-2 rounded">
+        <b>${o.total} บาท</b>
+        ${o.order_items.map(i=>`
+          <div>- ${i.product_name} × ${i.qty}</div>
+        `).join('')}
       </div>`;
   });
-  dailyTotal.innerText=sum;
 
-  drawTimeChart(orders);
-  drawProductChart();
+  dailyTotal.innerText=sum;
 }
 
 /* ================= EXPORT ================= */
@@ -363,10 +120,15 @@ async function exportExcel(){
 
   const { data:orders } = await db.from('orders')
     .select(`order_items!order_items_order_id_fkey(product_name,qty,price)`)
-    .gte('created_at',start).lte('created_at',end);
+    .gte('created_at',start)
+    .lte('created_at',end);
 
   let rows=[['สินค้า','จำนวน','รวม']];
-  orders.forEach(o=>o.order_items.forEach(i=>rows.push([i.product_name,i.qty,i.qty*i.price])));
+  orders.forEach(o=>{
+    o.order_items.forEach(i=>{
+      rows.push([i.product_name,i.qty,i.qty*i.price]);
+    });
+  });
 
   const csv='\ufeff'+rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
   const a=document.createElement('a');
@@ -375,185 +137,67 @@ async function exportExcel(){
   a.click();
 }
 
-/* ================= CHART TIME ================= */
-function drawTimeChart(orders){
-  const ctx = document.getElementById('salesChart').getContext('2d');
-  const totals = Array(24).fill(0);
-
-  orders.forEach(o=>{
-    const h = Number(
-      new Date(o.created_at).toLocaleString(
-        'th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',hour12:false}
-      )
-    );
-    totals[h]+=o.total;
-  });
-
-  if(window._salesChart instanceof Chart){
-    window._salesChart.destroy();
-  }
-
-  window._salesChart = new Chart(ctx,{
-    type:'bar',
-    data:{
-      labels:[...Array(24).keys()].map(h=>`${h}:00`),
-      datasets:[{label:'บาท',data:totals,backgroundColor:'#22c55e'}]
-    },
-    options:{plugins:{legend:{display:false}}}
-  });
-}
-
-/* ================= CHART PRODUCT ================= */
-async function drawProductChart(){
-  const d = billDate.value;
-  if(!d) return;
-
-  const { start, end } = thaiRange(d);
-  const selectedCategory = categoryFilter.value;
-
-  // ดึง product + category
-  const { data: products } = await db
-    .from('products')
-    .select('name, category');
-
-  // map ชื่อสินค้า → หมวด
-  const productCategoryMap = {};
-  products.forEach(p => {
-    productCategoryMap[p.name] = p.category;
-  });
-
-  const { data: orders } = await db
-    .from('orders')
-    .select(`
-      order_items!order_items_order_id_fkey(
-        product_name,
-        qty
-      )
-    `)
-    .gte('created_at', start)
-    .lte('created_at', end);
-
-  const summary = {};
-
-  orders.forEach(o => {
-    o.order_items.forEach(i => {
-
-      // 🔑 ตัด option ออก เช่น "น้ำยากะทิ (ผสมน้ำ:แกงไตปลา)"
-      const baseName = i.product_name.split(' (')[0];
-
-      const productCategory = productCategoryMap[baseName];
-
-      // กรองตามหมวด
-      if (selectedCategory && productCategory !== selectedCategory) return;
-
-      summary[baseName] = (summary[baseName] || 0) + i.qty;
-    });
-  });
-
-  const labels = Object.keys(summary);
-  const values = Object.values(summary);
-
-  const ctx = document.getElementById('productChart').getContext('2d');
-
-  if (window._productChart instanceof Chart) {
-    window._productChart.destroy();
-  }
-
-  if (!labels.length) return;
-
-  window._productChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'จำนวนที่ขายได้',
-        data: values,
-        backgroundColor: '#38bdf8'
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      plugins: { legend: { display: false } }
-    }
-  });
-}
-
+/* ================= CLEAR ALL BILLS ================= */
 async function clearAllBills(){
-  const d = billDate.value;
+  const d=billDate.value;
   if(!d) return;
 
-  const confirm = await Swal.fire({
-    title: 'ยืนยันการลบ',
-    html: `
-      <div style="text-align:left">
-        ⚠️ การกระทำนี้จะ:
-        <ul>
-          <li>ลบบิลทั้งหมดของวันที่เลือก</li>
-          <li>ลบรายการสินค้าในบิลทั้งหมด</li>
-          <li><b>ไม่สามารถกู้คืนได้</b></li>
-        </ul>
-      </div>
-    `,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'ลบทั้งหมด',
-    confirmButtonColor: '#dc2626',
-    cancelButtonText: 'ยกเลิก'
+  const ok = await Swal.fire({
+    title:'ยืนยันการลบ',
+    text:'จะลบบิลและรายการอาหารทั้งหมดของวันนี้',
+    icon:'warning',
+    showCancelButton:true,
+    confirmButtonColor:'#dc2626',
+    confirmButtonText:'ลบทั้งหมด'
   });
 
-  if(!confirm.isConfirmed) return;
+  if(!ok.isConfirmed) return;
 
-  const { start, end } = thaiRange(d);
+  const {start,end}=thaiRange(d);
 
-  /* 1️⃣ ดึง order id ของวันนั้น */
-  const { data: orders, error: err1 } = await db
+  /* 1️⃣ ดึง order id */
+  const { data:orders } = await db
     .from('orders')
     .select('id')
-    .gte('created_at', start)
-    .lte('created_at', end);
+    .gte('created_at',start)
+    .lte('created_at',end);
 
-  if(err1 || !orders.length){
-    Swal.fire('ไม่พบบิล', 'ไม่มีข้อมูลในวันที่เลือก', 'info');
+  if(!orders || orders.length===0){
+    Swal.fire('ไม่พบบิล','ไม่มีข้อมูลในวันที่เลือก','info');
     return;
   }
 
-  const orderIds = orders.map(o => o.id);
+  const orderIds = orders.map(o=>o.id);
 
-  /* 2️⃣ ลบ order_items ก่อน (สำคัญ) */
-  const { error: err2 } = await db
+  /* 2️⃣ ลบ order_items */
+  const { error:e1 } = await db
     .from('order_items')
     .delete()
-    .in('order_id', orderIds);
+    .in('order_id',orderIds);
 
-  if(err2){
-    Swal.fire('ผิดพลาด', err2.message, 'error');
+  if(e1){
+    Swal.fire('ลบรายการอาหารไม่ได้',e1.message,'error');
     return;
   }
 
   /* 3️⃣ ลบ orders */
-  const { error: err3 } = await db
+  const { error:e2 } = await db
     .from('orders')
     .delete()
-    .in('id', orderIds);
+    .in('id',orderIds);
 
-  if(err3){
-    Swal.fire('ผิดพลาด', err3.message, 'error');
+  if(e2){
+    Swal.fire('ลบบิลไม่ได้',e2.message,'error');
     return;
   }
 
-  Toast.fire({ icon:'success', title:'เคลียร์บิลทั้งหมดแล้ว' });
-
-  // refresh UI
+  Toast.fire({icon:'success',title:'เคลียร์บิลทั้งหมดแล้ว'});
   loadBills();
 }
 
 /* ================= INIT ================= */
-loadCategories();
-loadProducts();
-loadTables();
 billDate.value=new Date().toISOString().split('T')[0];
 loadBills();
-  
 </script>
 
 </body>
