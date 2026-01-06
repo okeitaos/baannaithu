@@ -13,13 +13,13 @@
 
 <div class="max-w-7xl mx-auto grid grid-cols-12 gap-4">
 
-  <!-- ================= โต๊ะ ================= -->
+  <!-- โต๊ะ -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">🪑 โต๊ะ</h2>
     <div id="tableList" class="grid grid-cols-2 gap-2"></div>
   </div>
 
-  <!-- ================= เมนู ================= -->
+  <!-- เมนู -->
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
@@ -32,7 +32,7 @@
     <div id="menuList" class="space-y-3"></div>
   </div>
 
-  <!-- ================= ตะกร้า ================= -->
+  <!-- ตะกร้า -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">
       🧾 โต๊ะ <span id="currentTable">-</span>
@@ -95,11 +95,7 @@ async function loadTables() {
 
 /* ================= MENU ================= */
 async function loadMenu() {
-  const { data } = await sb
-    .from("products")
-    .select("*")
-    .eq("active", true)
-
+  const { data } = await sb.from("products").select("*").eq("active", true)
   products = data || []
   noodleMenus = products.filter(p => p.category === "ขนมจีน")
 
@@ -113,12 +109,11 @@ async function loadMenu() {
     let optionsHTML = ""
     if (p.category === "ขนมจีน") {
       const mixOptions = noodleMenus.filter(n =>
-        n.name !== p.name &&
-        !restrictedMixTargets.includes(n.name)
+        n.name !== p.name && !restrictedMixTargets.includes(n.name)
       )
 
       optionsHTML = `
-        <label class="block text-sm mt-1">
+        <label class="block text-sm">
           <input type="checkbox" class="sp"> พิเศษ (+10)
         </label>
         <label class="block text-sm mt-1">
@@ -150,31 +145,39 @@ async function loadMenu() {
       if (sp) price += 10
       if (mixId) price += 10
 
-      cart.push({
-        product: p,
+      addToCart({
+        product_id: p.id,
+        name: p.name,
         price,
         option_special: sp,
         mix_sauce_id: mixId
       })
-      renderCart()
     }
 
     menuList.appendChild(card)
   })
 }
 
-function setCategory(cat) {
-  currentCategory = cat
-  loadMenu()
+/* ================= CART LOGIC ================= */
+function addToCart(item) {
+  const key = `${item.product_id}_${item.option_special}_${item.mix_sauce_id || ""}`
+  const found = cart.find(i => i.key === key)
+
+  if (found) {
+    found.qty += 1
+  } else {
+    cart.push({ ...item, qty: 1, key })
+  }
+  renderCart()
 }
 
-/* ================= CART ================= */
 function renderCart() {
   cartList.innerHTML = ""
   let total = 0
 
   cart.forEach((item, index) => {
-    total += item.price
+    total += item.price * item.qty
+
     const mixName = item.mix_sauce_id
       ? noodleMenus.find(n => n.id === item.mix_sauce_id)?.name
       : ""
@@ -183,16 +186,31 @@ function renderCart() {
     div.className = "bg-slate-700 p-2 rounded flex justify-between items-center"
 
     div.innerHTML = `
-      <span>
-        ${item.product.name}
+      <div>
+        ${item.name}
         ${item.option_special ? "(พิเศษ)" : ""}
         ${mixName ? `(ผสม ${mixName})` : ""}
-      </span>
-      <button class="text-red-400">ลบ</button>
+        <div class="text-sm text-gray-300">
+          ${item.price} บาท / ที่
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="px-2 bg-slate-600">-</button>
+        <span>${item.qty}</span>
+        <button class="px-2 bg-slate-600">+</button>
+      </div>
     `
 
-    div.querySelector("button").onclick = () => {
-      cart.splice(index, 1)
+    const [btnMinus, , btnPlus] = div.querySelectorAll("button")
+
+    btnMinus.onclick = () => {
+      item.qty--
+      if (item.qty <= 0) cart.splice(index, 1)
+      renderCart()
+    }
+
+    btnPlus.onclick = () => {
+      item.qty++
       renderCart()
     }
 
@@ -216,8 +234,9 @@ async function submitOrder() {
   for (const item of cart) {
     await sb.from("order_items").insert({
       order_id: order.id,
-      product_id: item.product.id,
+      product_id: item.product_id,
       price: item.price,
+      qty: item.qty,
       option_special: item.option_special,
       option_mix: !!item.mix_sauce_id,
       mix_sauce_id: item.mix_sauce_id,
@@ -236,6 +255,11 @@ async function submitOrder() {
 }
 
 /* ================= INIT ================= */
+function setCategory(cat) {
+  currentCategory = cat
+  loadMenu()
+}
+
 loadTables()
 loadMenu()
 </script>
