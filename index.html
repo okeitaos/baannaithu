@@ -478,10 +478,18 @@ async function confirmPay(type){
     });
   }
 
-  cart = [];
-  renderBill();
-  closePay();
-  Swal.fire({ icon:'success', title:'บันทึกบิลเรียบร้อย' });
+ cart = [];
+renderBill();
+tableSelect.value = '';   // ✅ รีเซ็ตโต๊ะ
+closePay();
+
+Swal.fire({
+  icon:'success',
+  title:'บันทึกบิลเรียบร้อย',
+  timer:1200,
+  showConfirmButton:false
+});
+
 }
 
 function closePay(){
