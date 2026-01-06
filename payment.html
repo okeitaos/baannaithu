@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<title>💰 คิดเงิน / ปิดบิล</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="icon" href="data:,">
+</head>
+
+<body class="bg-slate-900 text-white min-h-screen p-4">
+
+<div class="max-w-6xl mx-auto grid grid-cols-12 gap-4">
+
+  <!-- โต๊ะ -->
+  <div class="col-span-3 bg-slate-800 rounded-xl p-4">
+    <h2 class="font-bold mb-3">🪑 โต๊ะที่ยังไม่ปิดบิล</h2>
+    <div id="tableList" class="space-y-2"></div>
+  </div>
+
+  <!-- รายละเอียดบิล -->
+  <div class="col-span-9 bg-slate-800 rounded-xl p-4">
+    <h2 class="font-bold mb-3">🧾 รายการอาหาร</h2>
+
+    <div id="billItems" class="space-y-2 mb-4"></div>
+
+    <div class="border-t pt-4 flex justify-between items-center">
+      <div class="text-xl font-bold">
+        รวมทั้งหมด: <span id="totalPrice">0</span> บาท
+      </div>
+
+      <button
+        id="payBtn"
+        class="bg-green-600 px-6 py-2 rounded disabled:opacity-40"
+        disabled>
+        ✅ ชำระเงิน / ปิดบิล
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const sb = supabase.createClient(
+  "https://nvsptbbvxjulrpdebrhn.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+)
+
+/* ================= STATE ================= */
+let currentOrder = null
+let productMap = {}
+
+/* ================= LOAD PRODUCTS ================= */
+async function loadProducts() {
+  const { data } = await sb.from("products").select("id,name,price")
+  ;(data || []).forEach(p => productMap[p.id] = p)
+}
+
+/* ================= LOAD TABLES ================= */
+async function loadTables() {
+  const { data } = await sb
+    .from("orders")
+    .select("id, table_id, tables(table_no)")
+    .eq("status", "open")
+
+  tableList.innerHTML = ""
+
+  ;(data || []).forEach(o => {
+    const btn = document.createElement("button")
+    btn.className = "w-full bg-blue-600 py-2 rounded"
+    btn.textContent = `โต๊ะ ${o.tables.table_no}`
+    btn.onclick = () => loadBill(o)
+    tableList.appendChild(btn)
+  })
+}
+
+/* ================= LOAD BILL ================= */
+async function loadBill(order) {
+  currentOrder = order
+
+  const { data } = await sb
+    .from("order_items")
+    .select("*")
+    .eq("order_id", order.id)
+
+  let total = 0
+  billItems.innerHTML = ""
+
+  ;(data || []).forEach(it => {
+    const p = productMap[it.product_id]
+    const price = p.price * it.qty
+    total += price
+
+    const div = document.createElement("div")
+    div.className = "flex justify-between border-b border-slate-700 py-1"
+    div.innerHTML = `
+      <div>${p.name} x ${it.qty}</div>
+      <div>${price} บาท</div>
+    `
+    billItems.appendChild(div)
+  })
+
+  totalPrice.textContent = total
+  payBtn.disabled = false
+}
+
+/* ================= PAY ================= */
+payBtn.onclick = async () => {
+  if (!currentOrder) return
+
+  const confirm = await Swal.fire({
+    title: "ยืนยันชำระเงิน?",
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "ชำระเงิน",
+    cancelButtonText: "ยกเลิก"
+  })
+
+  if (!confirm.isConfirmed) return
+
+  // 1) ปิด order
+  await sb.from("orders")
+    .update({ status: "paid" })
+    .eq("id", currentOrder.id)
+
+  // 2) คืนโต๊ะ
+  await sb.from("tables")
+    .update({ status: "available" })
+    .eq("id", currentOrder.table_id)
+
+  Swal.fire("สำเร็จ", "ปิดบิลเรียบร้อย", "success")
+
+  currentOrder = null
+  billItems.innerHTML = ""
+  totalPrice.textContent = 0
+  payBtn.disabled = true
+
+  loadTables()
+}
+
+/* ================= INIT ================= */
+;(async () => {
+  await loadProducts()
+  await loadTables()
+})()
+</script>
+
+</body>
+</html>
