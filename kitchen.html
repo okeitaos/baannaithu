@@ -34,7 +34,6 @@ const ding = document.getElementById("dingSound")
 let productMap = {}
 let tableMap = {}
 let orderTableMap = {}
-let knownOrderIds = new Set()
 
 /* ================= LOAD MASTER ================= */
 async function loadProducts() {
@@ -59,7 +58,6 @@ async function loadOrdersMap() {
 async function cancelItem(item) {
   const confirm = await Swal.fire({
     title: "ยกเลิกรายการนี้?",
-    text: "ของหมด / ไม่สามารถเสิร์ฟได้",
     icon: "warning",
     showCancelButton: true,
     confirmButtonText: "ยกเลิก",
@@ -74,35 +72,24 @@ async function cancelItem(item) {
   loadBills()
 }
 
-async function splitItem(item) {
+async function reduceItem(item) {
+  // ลดลง 1
   if (item.qty <= 1) {
-    Swal.fire("ไม่สามารถแบ่งได้", "จำนวน = 1", "info")
-    return
+    // เหลือ 1 → ยกเลิกทั้งรายการ
+    return cancelItem(item)
   }
 
-  const { value: servedQty } = await Swal.fire({
-    title: "เสิร์ฟได้กี่ที่?",
-    input: "number",
-    inputAttributes: { min: 1, max: item.qty - 1 },
-    inputValue: 1,
-    showCancelButton: true
-  })
-
-  if (!servedQty) return
-
-  const cancelledQty = item.qty - servedQty
-
-  // 1) update ตัวที่เสิร์ฟ
+  // 1) update ตัวที่เหลือ
   await sb.from("order_items")
-    .update({ qty: servedQty, status: "done" })
+    .update({ qty: item.qty - 1 })
     .eq("id", item.id)
 
-  // 2) insert ตัวที่ยกเลิก
+  // 2) insert cancelled 1
   await sb.from("order_items").insert({
     order_id: item.order_id,
     product_id: item.product_id,
     mix_sauce_id: item.mix_sauce_id,
-    qty: cancelledQty,
+    qty: 1,
     option_special: item.option_special,
     option_mix: item.option_mix,
     status: "cancelled"
@@ -113,6 +100,8 @@ async function splitItem(item) {
 
 /* ================= LOAD BILLS ================= */
 async function loadBills(playSound = false) {
+  await loadOrdersMap()   // ⭐ แก้ปัญหาเลขโต๊ะไม่ขึ้น
+
   const { data } = await sb
     .from("order_items")
     .select("*")
@@ -136,11 +125,11 @@ async function loadBills(playSound = false) {
       const name = productMap[it.product_id] || "-"
       return `
         <div class="border-b border-slate-700 py-2">
-          <div class="flex justify-between">
+          <div class="flex justify-between items-center">
             <div>${name} x ${it.qty}</div>
             <div class="flex gap-2">
+              <button class="bg-yellow-500 px-2 rounded reduce">➖</button>
               <button class="bg-red-600 px-2 rounded cancel">❌</button>
-              <button class="bg-yellow-500 px-2 rounded split">➗</button>
             </div>
           </div>
         </div>
@@ -168,8 +157,8 @@ async function loadBills(playSound = false) {
       btn.onclick = () => cancelItem(items[i])
     )
 
-    card.querySelectorAll(".split").forEach((btn, i) =>
-      btn.onclick = () => splitItem(items[i])
+    card.querySelectorAll(".reduce").forEach((btn, i) =>
+      btn.onclick = () => reduceItem(items[i])
     )
 
     billList.appendChild(card)
@@ -189,8 +178,7 @@ channel.subscribe()
 ;(async () => {
   await loadProducts()
   await loadTables()
-  await loadOrdersMap()
-  loadBills()
+  await loadBills()
 })()
 </script>
 
