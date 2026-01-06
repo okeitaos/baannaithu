@@ -9,6 +9,130 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+  /* ===== Base ===== */
+  body {
+    background: radial-gradient(ellipse at top, #1e293b, #020617);
+    color: #e5e7eb;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  h1, h2 {
+    letter-spacing: .3px;
+  }
+
+  /* ===== Section Card ===== */
+  section {
+    background: linear-gradient(180deg, #0f172a, #020617);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+
+  /* ===== Inputs ===== */
+  input, select {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #cbd5e1;
+    font-size: 15px;
+  }
+
+  input::placeholder {
+    color: #94a3b8;
+  }
+
+  input:focus, select:focus {
+    outline: none;
+    border-color: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34,197,94,.25);
+  }
+
+  /* ===== Buttons ===== */
+  button {
+    font-weight: 500;
+  }
+
+  button.bg-emerald-600 {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+  }
+
+  button.bg-emerald-600:hover {
+    filter: brightness(1.05);
+  }
+
+  button.text-red-400:hover {
+    color: #f87171;
+  }
+
+  /* ===== Tables ===== */
+  table {
+    border-collapse: collapse;
+    margin-top: .5rem;
+  }
+
+  thead th {
+    text-align: left;
+    font-weight: 600;
+    color: #cbd5f5;
+    padding: .4rem;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  tbody tr:hover {
+    background: rgba(255,255,255,0.03);
+  }
+
+  tbody td {
+    padding: .35rem .4rem;
+    color: #e5e7eb;
+    font-size: 14px;
+  }
+
+  tbody input[type="number"] {
+    width: 80px;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+
+  /* ===== Checkboxes ===== */
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #22c55e;
+    cursor: pointer;
+  }
+
+  /* ===== Bill list ===== */
+  #billList > div {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  #billList b {
+    color: #34d399;
+    font-weight: 600;
+  }
+
+  /* ===== Charts ===== */
+  canvas {
+    margin-top: .5rem;
+  }
+
+  /* ===== Scrollbar (desktop) ===== */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 4px;
+  }
+</style>
+
 </head>
 
 <body class="bg-slate-900 text-white p-4 space-y-6">
