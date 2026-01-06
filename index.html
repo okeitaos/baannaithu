@@ -13,32 +13,32 @@
 
 <div class="max-w-7xl mx-auto grid grid-cols-12 gap-4">
 
-  <!-- โต๊ะ -->
+  <!-- ================= โต๊ะ ================= -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">🪑 โต๊ะ</h2>
     <div id="tableList" class="grid grid-cols-2 gap-2"></div>
   </div>
 
-  <!-- เมนู -->
+  <!-- ================= เมนู ================= -->
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
     <div class="flex gap-2 mb-3">
-      <button id="btn-noodle" class="px-3 py-1 rounded bg-orange-600">🍜 ขนมจีน</button>
-      <button id="btn-drink" class="px-3 py-1 rounded bg-slate-600">🥤 เครื่องดื่ม</button>
-      <button id="btn-snack" class="px-3 py-1 rounded bg-slate-600">🍢 ทานเล่น</button>
+      <button onclick="setCategory('ขนมจีน')" class="px-3 py-1 rounded bg-orange-600">🍜 ขนมจีน</button>
+      <button onclick="setCategory('เครื่องดื่ม')" class="px-3 py-1 rounded bg-blue-600">🥤 เครื่องดื่ม</button>
+      <button onclick="setCategory('ทานเล่น')" class="px-3 py-1 rounded bg-green-600">🍢 ทานเล่น</button>
     </div>
 
     <div id="menuList" class="space-y-3"></div>
   </div>
 
-  <!-- บิล -->
+  <!-- ================= ตะกร้า ================= -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">
       🧾 โต๊ะ <span id="currentTable">-</span>
     </h2>
 
-    <div id="orderItems" class="space-y-2 mb-4"></div>
+    <div id="cartList" class="space-y-2 mb-4"></div>
 
     <div class="border-t pt-3 space-y-2">
       <div class="flex justify-between font-bold text-lg">
@@ -46,10 +46,12 @@
         <span id="totalPrice">0 ฿</span>
       </div>
 
-      <button id="sendOrderBtn"
+      <button
+        onclick="submitOrder()"
+        id="sendBtn"
         class="w-full bg-green-600 py-2 rounded disabled:opacity-40"
         disabled>
-        🟢 ส่งออร์เดอร์เข้าครัว
+        🟢 ส่งออร์เดอร์
       </button>
     </div>
   </div>
@@ -62,75 +64,43 @@ const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co"
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-/* ================= DOM (ต้องอยู่บนสุด) ================= */
-const tableList     = document.getElementById("tableList")
-const menuList      = document.getElementById("menuList")
-const orderItems    = document.getElementById("orderItems")
-const currentTable  = document.getElementById("currentTable")
-const totalPrice    = document.getElementById("totalPrice")
-
-const btnNoodle     = document.getElementById("btn-noodle")
-const btnDrink      = document.getElementById("btn-drink")
-const btnSnack      = document.getElementById("btn-snack")
-const sendOrderBtn  = document.getElementById("sendOrderBtn")
-
 /* ================= STATE ================= */
+let selectedTable = null
 let currentCategory = "ขนมจีน"
-let selectedTableId = null
-let currentOrderId  = null
+let products = []
+let cart = []   // <<< สำคัญ: เก็บใน memory เท่านั้น
 
-let noodleMenus = []
-const restrictedMixTargets = ["แกงปู", "น้ำชุบหยำ"]
-
-/* ================= TABLES ================= */
+/* ================= LOAD TABLES ================= */
 async function loadTables() {
   const { data } = await sb.from("tables").select("*").order("table_no")
   tableList.innerHTML = ""
 
-  ;(data || []).forEach(t => {
+  data.forEach(t => {
     const btn = document.createElement("button")
     btn.className =
       "p-2 rounded font-bold " +
-      (selectedTableId === t.id ? "bg-yellow-500" :
-       t.status === "occupied" ? "bg-red-600" : "bg-green-600")
-
+      (t.status === "occupied" ? "bg-red-600" : "bg-green-600")
     btn.textContent = "โต๊ะ " + t.table_no
-    btn.onclick = () => selectTable(t)
+    btn.onclick = () => {
+      selectedTable = t
+      currentTable.textContent = t.table_no
+    }
     tableList.appendChild(btn)
   })
 }
 
-function selectTable(t) {
-  if (currentOrderId && selectedTableId !== t.id) {
-    alert("ต้องจ่ายเงินก่อน")
-    return
-  }
-  selectedTableId = t.id
-  currentTable.textContent = t.table_no
-  loadOrderItems()
-  loadTables()
-}
-
-/* ================= CATEGORY ================= */
-function setCategory(cat) {
-  currentCategory = cat
-  loadMenu()
-}
-
-btnNoodle.onclick = () => setCategory("ขนมจีน")
-btnDrink.onclick  = () => setCategory("เครื่องดื่ม")
-btnSnack.onclick  = () => setCategory("ทานเล่น")
-
 /* ================= MENU ================= */
 async function loadMenu() {
-  const { data: products } = await sb
+  const { data } = await sb
     .from("products")
     .select("*")
     .eq("category", currentCategory)
+    .eq("active", true)
 
+  products = data || []
   menuList.innerHTML = ""
 
-  ;(products || []).forEach(p => {
+  products.forEach(p => {
     const div = document.createElement("div")
     div.className = "bg-slate-700 p-3 rounded flex justify-between"
 
@@ -142,81 +112,81 @@ async function loadMenu() {
       <button class="bg-blue-600 px-4 rounded">เพิ่ม</button>
     `
 
-    div.querySelector("button").onclick = () => addItemDraft(p)
+    div.querySelector("button").onclick = () => {
+      cart.push({ product: p, qty: 1 })
+      renderCart()
+    }
+
     menuList.appendChild(div)
   })
 }
 
-/* ================= ORDER ================= */
-async function addItemDraft(p) {
-  if (!selectedTableId) {
-    alert("เลือกโต๊ะก่อน")
-    return
-  }
-
-  if (!currentOrderId) {
-    const { data } = await sb
-      .from("orders")
-      .insert({ table_id: selectedTableId })
-      .select()
-      .single()
-    currentOrderId = data.id
-  }
-
-  await sb.from("order_items").insert({
-    order_id: currentOrderId,
-    product_id: p.id,
-    price: p.price,
-    status: "draft"
-  })
-
-  loadOrderItems()
+function setCategory(cat) {
+  currentCategory = cat
+  loadMenu()
 }
 
-async function loadOrderItems() {
-  if (!currentOrderId) {
-    orderItems.innerHTML = ""
-    totalPrice.textContent = "0 ฿"
-    sendOrderBtn.disabled = true
-    return
-  }
-
-  const { data } = await sb
-    .from("order_items")
-    .select("id, price, status, products(name)")
-    .eq("order_id", currentOrderId)
-
+/* ================= CART ================= */
+function renderCart() {
+  cartList.innerHTML = ""
   let total = 0
-  let hasDraft = false
-  orderItems.innerHTML = ""
 
-  ;(data || []).forEach(i => {
-    total += i.price
-    if (i.status === "draft") hasDraft = true
+  cart.forEach((item, index) => {
+    total += item.product.price * item.qty
 
     const div = document.createElement("div")
-    div.className = "bg-slate-700 p-2 rounded text-sm"
-    div.textContent = `${i.products.name} (${i.status})`
-    orderItems.appendChild(div)
+    div.className = "bg-slate-700 p-2 rounded flex justify-between items-center"
+
+    div.innerHTML = `
+      <span>${item.product.name}</span>
+      <button class="text-red-400">ลบ</button>
+    `
+
+    div.querySelector("button").onclick = () => {
+      cart.splice(index, 1)
+      renderCart()
+    }
+
+    cartList.appendChild(div)
   })
 
   totalPrice.textContent = total + " ฿"
-  sendOrderBtn.disabled = !hasDraft
+  sendBtn.disabled = cart.length === 0 || !selectedTable
 }
 
 /* ================= SEND ORDER ================= */
-sendOrderBtn.onclick = async () => {
-  await sb.from("order_items")
-    .update({ status: "pending" })
-    .eq("order_id", currentOrderId)
-    .eq("status", "draft")
+async function submitOrder() {
+  if (!selectedTable || cart.length === 0) return
 
+  // 1) สร้าง order
+  const { data: order } = await sb
+    .from("orders")
+    .insert({ table_id: selectedTable.id })
+    .select()
+    .single()
+
+  // 2) insert items
+  for (const item of cart) {
+    await sb.from("order_items").insert({
+      order_id: order.id,
+      product_id: item.product.id,
+      price: item.product.price,
+      qty: item.qty,
+      status: "pending"
+    })
+  }
+
+  // 3) lock โต๊ะ
   await sb.from("tables")
-    .update({ status: "occupied", current_order_id: currentOrderId })
-    .eq("id", selectedTableId)
+    .update({ status: "occupied", current_order_id: order.id })
+    .eq("id", selectedTable.id)
+
+  // 4) clear state
+  cart = []
+  renderCart()
+  alert("ส่งออร์เดอร์เรียบร้อย")
 
   loadTables()
-  loadOrderItems()
 }
 
 /* ================= INIT ================= */
