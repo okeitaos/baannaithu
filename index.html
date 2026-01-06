@@ -13,16 +13,17 @@
 
 <div class="grid grid-cols-12 gap-4 max-w-7xl mx-auto">
 
-  <!-- ================= TABLES ================= -->
+  <!-- TABLES -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">🪑 โต๊ะ</h2>
     <div id="tableList" class="grid grid-cols-2 gap-2"></div>
   </div>
 
-  <!-- ================= MENU ================= -->
+  <!-- MENU -->
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
+    <!-- CATEGORY BUTTONS -->
     <div class="flex gap-2 mb-3">
       <button id="btn-noodle" class="px-3 py-1 rounded bg-orange-600">🍜 ขนมจีน</button>
       <button id="btn-drink" class="px-3 py-1 rounded bg-slate-600">🥤 เครื่องดื่ม</button>
@@ -32,12 +33,9 @@
     <div id="menuList" class="space-y-2"></div>
   </div>
 
-  <!-- ================= ORDER ================= -->
+  <!-- ORDER -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">
-      🧾 โต๊ะ <span id="currentTable">-</span>
-    </h2>
-
+    <h2 class="font-bold mb-3">🧾 โต๊ะ <span id="currentTable">-</span></h2>
     <div id="orderItems" class="space-y-2 mb-3"></div>
 
     <div class="border-t pt-3">
@@ -46,8 +44,7 @@
         <span id="totalPrice">0 ฿</span>
       </div>
 
-      <button id="payBtn"
-        class="w-full mt-3 bg-green-600 py-2 rounded">
+      <button id="payBtn" class="w-full mt-3 bg-green-600 py-2 rounded">
         💰 คิดเงิน
       </button>
     </div>
@@ -57,14 +54,13 @@
 
 <script>
 /* ================= CONFIG ================= */
-const sb = supabase.createClient(
-  "https://nvsptbbvxjulrpdebrhn.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
-)
+const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co"
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 
 /* ================= STATE ================= */
 let currentCategory = 'ขนมจีน'
-
 let selectedTable = null
 let currentOrderId = null
 
@@ -74,16 +70,21 @@ const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
 /* ================= CATEGORY ================= */
 function setCategory(cat) {
   currentCategory = cat
+
+  document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-slate-600"
+  document.getElementById("btn-drink").className  = "px-3 py-1 rounded bg-slate-600"
+  document.getElementById("btn-snack").className  = "px-3 py-1 rounded bg-slate-600"
+
+  if (cat === 'ขนมจีน') document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-orange-600"
+  if (cat === 'เครื่องดื่ม') document.getElementById("btn-drink").className = "px-3 py-1 rounded bg-blue-600"
+  if (cat === 'ทานเล่น') document.getElementById("btn-snack").className = "px-3 py-1 rounded bg-green-600"
+
   loadMenu()
 }
 
 /* ================= TABLES ================= */
 async function loadTables() {
-  const { data } = await sb
-    .from("tables")
-    .select("*")
-    .order("table_no")
-
+  const { data } = await sb.from("tables").select("*").order("table_no")
   tableList.innerHTML = ""
 
   ;(data || []).forEach(t => {
@@ -102,9 +103,8 @@ async function loadTables() {
   })
 }
 
-async function selectTable(t) {
-  // ถ้าเลือกโต๊ะใหม่ ขณะยังไม่คิดเงิน
-  if (selectedTable && selectedTable.id !== t.id && currentOrderId) {
+function selectTable(t) {
+  if (selectedTable && currentOrderId && selectedTable.id !== t.id) {
     alert("❌ ต้องคิดเงินโต๊ะเดิมก่อน")
     return
   }
@@ -112,7 +112,6 @@ async function selectTable(t) {
   selectedTable = t
   currentTable.textContent = t.table_no
 
-  // ถ้าโต๊ะมี order อยู่แล้ว → ดึง order เดิม
   if (t.status === 'occupied' && t.current_order_id) {
     currentOrderId = t.current_order_id
     loadOrderItems()
@@ -162,7 +161,6 @@ async function loadMenu() {
           <input type="checkbox" id="sp_${p.id}"> พิเศษ (+10)
         </label>
       `
-
       const mixes = getAllowedMixOptions(p.name)
       if (mixes.length) {
         options += `
@@ -170,9 +168,7 @@ async function loadMenu() {
             ผสม (+10)
             <select id="mix_${p.id}" class="text-black ml-1">
               <option value="">-- ไม่ผสม --</option>
-              ${mixes.map(m =>
-                `<option value="${m.id}">${m.name}</option>`
-              ).join("")}
+              ${mixes.map(m => `<option value="${m.id}">${m.name}</option>`).join("")}
             </select>
           </label>
         `
@@ -205,7 +201,6 @@ async function addItem(id, base, name) {
     return
   }
 
-  // ถ้ายังไม่มี order → สร้างครั้งแรก
   if (!currentOrderId) {
     const { data: order } = await sb
       .from("orders")
@@ -214,10 +209,7 @@ async function addItem(id, base, name) {
       .single()
 
     await sb.from("tables")
-      .update({
-        status: "occupied",
-        current_order_id: order.id
-      })
+      .update({ status: "occupied", current_order_id: order.id })
       .eq("id", selectedTable.id)
 
     currentOrderId = order.id
@@ -250,21 +242,11 @@ async function addItem(id, base, name) {
 
 /* ================= ORDER ITEMS ================= */
 async function loadOrderItems() {
-  if (!currentOrderId) {
-    orderItems.innerHTML = ""
-    totalPrice.textContent = "0 ฿"
-    return
-  }
+  if (!currentOrderId) return
 
   const { data } = await sb
     .from("order_items")
-    .select(`
-      price,
-      option_special,
-      option_mix,
-      products(name),
-      mix:mix_sauce_id(name)
-    `)
+    .select(`price, option_special, option_mix, products(name), mix:mix_sauce_id(name)`)
     .eq("order_id", currentOrderId)
 
   let total = 0
@@ -282,42 +264,26 @@ async function loadOrderItems() {
   })
 
   totalPrice.textContent = total + " ฿"
-
-  await sb.from("orders")
-    .update({ total_price: total })
-    .eq("id", currentOrderId)
 }
 
 /* ================= PAY ================= */
-document.getElementById("payBtn").onclick = payOrder
-
-async function payOrder() {
+document.getElementById("payBtn").onclick = async () => {
   if (!currentOrderId) return
 
-  await sb.from("orders")
-    .update({ status: "paid" })
-    .eq("id", currentOrderId)
-
+  await sb.from("orders").update({ status: "paid" }).eq("id", currentOrderId)
   await sb.from("tables")
-    .update({
-      status: "available",
-      current_order_id: null
-    })
+    .update({ status: "available", current_order_id: null })
     .eq("id", selectedTable.id)
 
   alert("ชำระเงินเรียบร้อย")
   location.reload()
 }
 
-/* ================= REALTIME ================= */
-sb.channel("pos")
-  .on("postgres_changes",
-    { event: "*", schema: "public", table: "tables" },
-    loadTables
-  )
-  .subscribe()
-
 /* ================= INIT ================= */
+document.getElementById("btn-noodle").onclick = () => setCategory('ขนมจีน')
+document.getElementById("btn-drink").onclick  = () => setCategory('เครื่องดื่ม')
+document.getElementById("btn-snack").onclick  = () => setCategory('ทานเล่น')
+
 loadTables()
 loadMenu()
 </script>
