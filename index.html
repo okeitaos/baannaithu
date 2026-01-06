@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8">
@@ -190,6 +190,29 @@ async function resetAll(){
   tableSelect.value='';
   await loadTables();
 }
+</script>
+
+</body>
+</html> -->
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TEST BUTTON</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="p-4 bg-slate-900 text-white">
+
+<button id="btn" class="bg-emerald-600 px-6 py-3 rounded">
+  กดฉันสิ
+</button>
+
+<script>
+document.getElementById('btn').addEventListener('click',()=>{
+  alert('ปุ่มทำงานแล้ว');
+});
 </script>
 
 </body>
