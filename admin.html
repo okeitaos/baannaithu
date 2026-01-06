@@ -103,7 +103,7 @@ function thaiRange(d){
 </section>
 
 <script>
-/* ---------- CATEGORY ---------- */
+/* ================= CATEGORY ================= */
 async function loadCategories(){
   const { data } = await db.from('categories').select('*').order('name');
   categoryList.innerHTML='';
@@ -139,7 +139,7 @@ async function deleteCategory(id,name){
   loadCategories();
 }
 
-/* ---------- PRODUCT ---------- */
+/* ================= PRODUCT ================= */
 async function loadProducts(){
   const { data } = await db.from('products').select('*').order('category');
   productList.innerHTML='';
@@ -156,12 +156,22 @@ async function loadProducts(){
 
 async function addProduct(){
   if(!pName.value||!pPrice.value) return;
-  await db.from('products').insert({name:pName.value,category:pCategory.value,price:+pPrice.value,active:true});
+  await db.from('products').insert({
+    name:pName.value,
+    category:pCategory.value,
+    price:+pPrice.value,
+    active:true
+  });
   pName.value=pPrice.value='';
   loadProducts();
 }
-async function updateProductPrice(id,price){ await db.from('products').update({price:+price}).eq('id',id); }
-async function toggleProductActive(id,active){ await db.from('products').update({active}).eq('id',id); }
+
+async function updateProductPrice(id,price){
+  await db.from('products').update({price:+price}).eq('id',id);
+}
+async function toggleProductActive(id,active){
+  await db.from('products').update({active}).eq('id',id);
+}
 async function deleteProduct(id,name){
   const res = await Swal.fire({title:`ลบ ${name}?`,icon:'warning',showCancelButton:true});
   if(!res.isConfirmed) return;
@@ -169,7 +179,7 @@ async function deleteProduct(id,name){
   loadProducts();
 }
 
-/* ---------- TABLE ---------- */
+/* ================= TABLE ================= */
 async function loadTables(){
   const { data } = await db.from('tables').select('*').order('name');
   tableList.innerHTML='';
@@ -181,10 +191,17 @@ async function loadTables(){
       </div>`;
   });
 }
-async function addTable(){ if(!tName.value) return; await db.from('tables').insert({name:tName.value,active:true}); tName.value=''; loadTables(); }
-async function toggleTableActive(id,active){ await db.from('tables').update({active}).eq('id',id); }
+async function addTable(){
+  if(!tName.value) return;
+  await db.from('tables').insert({name:tName.value,active:true});
+  tName.value='';
+  loadTables();
+}
+async function toggleTableActive(id,active){
+  await db.from('tables').update({active}).eq('id',id);
+}
 
-/* ---------- BILLS ---------- */
+/* ================= BILLS ================= */
 async function loadBills(){
   const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
@@ -193,17 +210,23 @@ async function loadBills(){
     .select(`id,total,created_at,order_items!order_items_order_id_fkey(product_name,qty,price)`)
     .gte('created_at',start).lte('created_at',end);
 
-  billList.innerHTML=''; let sum=0;
+  billList.innerHTML='';
+  let sum=0;
   orders.forEach(o=>{
     sum+=o.total;
-    billList.innerHTML+=`<div><b>${o.total}</b>${o.order_items.map(i=>`<div>- ${i.product_name} × ${i.qty}</div>`).join('')}</div>`;
+    billList.innerHTML+=`
+      <div>
+        <b>${o.total}</b>
+        ${o.order_items.map(i=>`<div>- ${i.product_name} × ${i.qty}</div>`).join('')}
+      </div>`;
   });
   dailyTotal.innerText=sum;
+
   drawTimeChart(orders);
   drawProductChart();
 }
 
-/* ---------- EXPORT ---------- */
+/* ================= EXPORT ================= */
 async function exportExcel(){
   const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
@@ -218,21 +241,39 @@ async function exportExcel(){
   const csv='\ufeff'+rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
-  a.download=`ยอดขาย_${d}.csv`; a.click();
+  a.download=`ยอดขาย_${d}.csv`;
+  a.click();
 }
 
-/* ---------- CHART TIME ---------- */
+/* ================= CHART TIME ================= */
 function drawTimeChart(orders){
-  const totals=Array(24).fill(0);
+  const ctx = document.getElementById('salesChart').getContext('2d');
+  const totals = Array(24).fill(0);
+
   orders.forEach(o=>{
-    const h=Number(new Date(o.created_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',hour12:false}));
+    const h = Number(
+      new Date(o.created_at).toLocaleString(
+        'th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',hour12:false}
+      )
+    );
     totals[h]+=o.total;
   });
-  if(window.salesChart) window.salesChart.destroy();
-  window.salesChart=new Chart(salesChart,{type:'bar',data:{labels:[...Array(24).keys()].map(h=>`${h}:00`),datasets:[{data:totals,label:'บาท'}]}});
+
+  if(window._salesChart instanceof Chart){
+    window._salesChart.destroy();
+  }
+
+  window._salesChart = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:[...Array(24).keys()].map(h=>`${h}:00`),
+      datasets:[{label:'บาท',data:totals,backgroundColor:'#22c55e'}]
+    },
+    options:{plugins:{legend:{display:false}}}
+  });
 }
 
-/* ---------- CHART PRODUCT ---------- */
+/* ================= CHART PRODUCT ================= */
 async function drawProductChart(){
   const d=billDate.value; if(!d) return;
   const {start,end}=thaiRange(d);
@@ -251,13 +292,23 @@ async function drawProductChart(){
     map[i.product_name]=(map[i.product_name]||0)+i.qty;
   }));
 
-  const labels=Object.keys(map), values=Object.values(map);
-  if(window.productChart) window.productChart.destroy();
+  const labels=Object.keys(map);
+  const values=Object.values(map);
+  const ctx=document.getElementById('productChart').getContext('2d');
+
+  if(window._productChart instanceof Chart){
+    window._productChart.destroy();
+  }
   if(!labels.length) return;
-  window.productChart=new Chart(productChart,{type:'bar',data:{labels,datasets:[{data:values,label:'จำนวน',backgroundColor:'#38bdf8'}]},options:{indexAxis:'y'}});
+
+  window._productChart=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[{label:'จำนวน',data:values,backgroundColor:'#38bdf8'}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}}}
+  });
 }
 
-/* ---------- INIT ---------- */
+/* ================= INIT ================= */
 loadCategories();
 loadProducts();
 loadTables();
