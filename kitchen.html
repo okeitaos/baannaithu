@@ -42,7 +42,7 @@ async function loadOrders(playSound = false) {
       option_special,
       option_mix,
       status,
-      products(name),
+      products:products!order_items_product_id_fkey(name),
       orders(
         id,
         tables(table_no)
