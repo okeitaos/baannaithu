@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>🍜 POS หน้าร้าน</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -35,7 +36,7 @@
     <div class="border-t border-slate-600 pt-3">
       <div class="flex justify-between text-lg font-bold">
         <span>รวม</span>
-        <span id="totalPrice">0</span>
+        <span id="totalPrice">0 ฿</span>
       </div>
 
       <button onclick="payOrder()"
@@ -48,22 +49,19 @@
 </div>
 
 <script>
-/* ================== CONFIG ================== */
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
+/* ================= CONFIG ================= */
 const sb = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
-</script>
-
 
 let currentOrderId = null
 let currentTableId = null
+let currentTableNo = null
 
-/* ================== LOAD TABLES ================== */
+/* ================= LOAD TABLES ================= */
 async function loadTables() {
-  const { data } = await supabase
+  const { data } = await sb
     .from("tables")
     .select("*")
     .eq("status", "available")
@@ -73,66 +71,84 @@ async function loadTables() {
   data.forEach(t => {
     const btn = document.createElement("button")
     btn.className = "bg-green-600 hover:bg-green-700 p-3 rounded-lg font-bold"
-    btn.innerText = "โต๊ะ " + t.table_no
+    btn.textContent = "โต๊ะ " + t.table_no
     btn.onclick = () => openTable(t)
     tableList.appendChild(btn)
   })
 }
 
-/* ================== OPEN TABLE ================== */
+/* ================= OPEN TABLE ================= */
 async function openTable(table) {
-  const { data: order } = await supabase
+  const { data: order, error } = await sb
     .from("orders")
-    .insert({ table_id: table.id, status: "open" })
+    .insert({
+      table_id: table.id,
+      status: "open",
+      total_price: 0
+    })
     .select()
     .single()
 
-  await supabase
-    .from("tables")
-    .update({ status: "occupied", current_order_id: order.id })
+  if (error) {
+    alert("เปิดโต๊ะไม่สำเร็จ")
+    return
+  }
+
+  await sb.from("tables")
+    .update({
+      status: "occupied",
+      current_order_id: order.id
+    })
     .eq("id", table.id)
 
   currentOrderId = order.id
   currentTableId = table.id
-  currentTable.innerText = table.table_no
+  currentTableNo = table.table_no
+  currentTable.textContent = table.table_no
 
   loadOrderItems()
   loadTables()
 }
 
-/* ================== LOAD MENU ================== */
+/* ================= LOAD MENU ================= */
 async function loadMenu() {
-  const { data } = await supabase
+  const { data } = await sb
     .from("products")
     .select("*")
     .eq("active", true)
+    .order("name")
 
   menuList.innerHTML = ""
+
   data.forEach(p => {
     const div = document.createElement("div")
     div.className = "bg-slate-700 p-3 rounded-lg"
 
     div.innerHTML = `
       <div class="font-bold">${p.name} - ${p.price}฿</div>
-      <div class="flex gap-2 mt-2">
+      <div class="flex items-center gap-2 mt-2 text-sm">
         <label><input type="checkbox" id="sp_${p.id}"> พิเศษ</label>
         <label><input type="checkbox" id="mix_${p.id}"> ผสมน้ำ</label>
-        <button class="ml-auto bg-blue-600 px-3 rounded"
-          onclick="addItem('${p.id}', ${p.price})">+</button>
+        <button
+          class="ml-auto bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded"
+          onclick="addItem('${p.id}', ${p.price})">เพิ่ม</button>
       </div>
     `
     menuList.appendChild(div)
   })
 }
 
-/* ================== ADD ITEM ================== */
+/* ================= ADD ITEM ================= */
 async function addItem(productId, price) {
-  if (!currentOrderId) return alert("เลือกโต๊ะก่อน")
+  if (!currentOrderId) {
+    alert("กรุณาเลือกโต๊ะก่อน")
+    return
+  }
 
-  const special = document.getElementById("sp_" + productId)?.checked
-  const mix = document.getElementById("mix_" + productId)?.checked
+  const special = document.getElementById("sp_" + productId)?.checked || false
+  const mix = document.getElementById("mix_" + productId)?.checked || false
 
-  await supabase.from("order_items").insert({
+  await sb.from("order_items").insert({
     order_id: currentOrderId,
     product_id: productId,
     qty: 1,
@@ -141,15 +157,18 @@ async function addItem(productId, price) {
     option_mix: mix,
     status: "pending"
   })
+
+  document.getElementById("sp_" + productId).checked = false
+  document.getElementById("mix_" + productId).checked = false
 }
 
-/* ================== LOAD ORDER ITEMS ================== */
+/* ================= LOAD ORDER ITEMS ================= */
 async function loadOrderItems() {
   if (!currentOrderId) return
 
-  const { data } = await supabase
+  const { data } = await sb
     .from("order_items")
-    .select("*, products(name)")
+    .select("id, qty, price, option_special, option_mix, products(name)")
     .eq("order_id", currentOrderId)
 
   let total = 0
@@ -158,51 +177,63 @@ async function loadOrderItems() {
   data.forEach(i => {
     total += i.price * i.qty
     const div = document.createElement("div")
-    div.className = "bg-slate-700 p-2 rounded"
-    div.innerText =
-      `${i.products.name} ${i.option_special ? "(พิเศษ)" : ""} ${i.option_mix ? "(ผสมน้ำ)" : ""}`
+    div.className = "bg-slate-700 p-2 rounded text-sm"
+    div.textContent =
+      `${i.products.name}` +
+      (i.option_special ? " (พิเศษ)" : "") +
+      (i.option_mix ? " (ผสมน้ำ)" : "")
     orderItems.appendChild(div)
   })
 
-  totalPrice.innerText = total + " ฿"
+  totalPrice.textContent = total + " ฿"
+
+  await sb.from("orders")
+    .update({ total_price: total })
+    .eq("id", currentOrderId)
 }
 
-/* ================== PAY ================== */
+/* ================= PAY ================= */
 async function payOrder() {
   if (!currentOrderId) return
 
-  await supabase.from("orders")
+  if (!confirm(`ยืนยันชำระเงิน โต๊ะ ${currentTableNo}?`)) return
+
+  await sb.from("orders")
     .update({ status: "paid" })
     .eq("id", currentOrderId)
 
-  await supabase.from("tables")
-    .update({ status: "available", current_order_id: null })
+  await sb.from("tables")
+    .update({
+      status: "available",
+      current_order_id: null
+    })
     .eq("id", currentTableId)
 
-  alert("ชำระเงินเรียบร้อย")
+  alert("✅ ชำระเงินเรียบร้อย")
 
   currentOrderId = null
   currentTableId = null
-  currentTable.innerText = "-"
+  currentTableNo = null
+  currentTable.textContent = "-"
   orderItems.innerHTML = ""
-  totalPrice.innerText = "0"
+  totalPrice.textContent = "0 ฿"
 
   loadTables()
 }
 
-/* ================== REALTIME ================== */
-supabase.channel("realtime-pos")
+/* ================= REALTIME ================= */
+sb.channel("pos-realtime")
   .on("postgres_changes",
     { event: "*", schema: "public", table: "order_items" },
-    loadOrderItems
+    () => loadOrderItems()
   )
   .on("postgres_changes",
     { event: "*", schema: "public", table: "tables" },
-    loadTables
+    () => loadTables()
   )
   .subscribe()
 
-/* ================== INIT ================== */
+/* ================= INIT ================= */
 loadTables()
 loadMenu()
 </script>
