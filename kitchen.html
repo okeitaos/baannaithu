@@ -30,16 +30,25 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 /* ================= STATE ================= */
 const orderList = document.getElementById("orderList")
 const ding = document.getElementById("dingSound")
+
 let knownItemIds = new Set()
 let productMap = {}
+let pollingTimer = null
 
-/* ================= LOAD PRODUCTS (ONCE) ================= */
+/* ================= LOAD PRODUCTS ================= */
 async function loadProducts() {
-  const { data } = await sb
+  const { data, error } = await sb
     .from("products")
     .select("id,name")
 
-  data.forEach(p => productMap[p.id] = p.name)
+  if (error) {
+    console.error("loadProducts error", error)
+    return
+  }
+
+  ;(data || []).forEach(p => {
+    productMap[p.id] = p.name
+  })
 }
 
 /* ================= LOAD ORDERS ================= */
@@ -64,32 +73,37 @@ async function loadOrders(playSound = false) {
     return
   }
 
-  // ดึง table_no แยกจาก orders
-  const orderIds = [...new Set(data.map(i => i.order_id))]
+  const rows = data || []
+
+  /* map โต๊ะ */
+  const orderIds = [...new Set(rows.map(r => r.order_id))]
   let tableMap = {}
 
-  if (orderIds.length) {
+  if (orderIds.length > 0) {
     const { data: orders } = await sb
       .from("orders")
       .select("id, tables(table_no)")
       .in("id", orderIds)
 
-    orders.forEach(o => tableMap[o.id] = o.tables.table_no)
+    ;(orders || []).forEach(o => {
+      tableMap[o.id] = o.tables?.table_no || "-"
+    })
   }
 
   orderList.innerHTML = ""
   let hasNew = false
 
-  data.forEach(item => {
+  rows.forEach(item => {
     if (!knownItemIds.has(item.id)) {
       knownItemIds.add(item.id)
       hasNew = true
     }
 
     const productName = productMap[item.product_id] || "ไม่ทราบชื่อ"
-    const mixName = item.option_mix && item.mix_sauce_id
-      ? productMap[item.mix_sauce_id]
-      : ""
+    const mixName =
+      item.option_mix && item.mix_sauce_id
+        ? productMap[item.mix_sauce_id]
+        : ""
 
     const card = document.createElement("div")
     card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
@@ -171,8 +185,10 @@ sb.channel("kitchen-realtime")
   )
   .subscribe()
 
-/* ================= FALLBACK POLLING ================= */
-setInterval(() => loadOrders(), 3000)
+/* ================= POLLING (SAFE) ================= */
+pollingTimer = window.setInterval(() => {
+  loadOrders()
+}, 3000)
 
 /* ================= INIT ================= */
 (async () => {
