@@ -8,58 +8,45 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-<style>
-body{
-  background:#020617;
-  color:#e5e7eb;
-}
-select,input{
-  color:#000;
-}
-</style>
 </head>
 
-<body class="p-3 space-y-3">
+<body class="bg-slate-900 text-white p-3 space-y-3">
 
 <h1 class="text-xl font-bold text-center">🍜 POS ร้านขนมจีน</h1>
 
-<!-- เลือกโต๊ะ -->
-<select id="tableSelect" class="w-full p-2 rounded"></select>
+<select id="tableSelect" class="w-full p-2 text-black rounded">
+  <option value="">-- เลือกโต๊ะ --</option>
+</select>
 
-<!-- หมวด -->
 <div id="categoryBar" class="flex gap-2 overflow-x-auto"></div>
-
-<!-- เมนู -->
 <div id="menu" class="grid grid-cols-2 gap-2"></div>
 
-<!-- บิล -->
 <div class="bg-slate-800 p-3 rounded">
   <div id="bill"></div>
-  <div class="border-t mt-2 pt-2 font-bold">
+  <div class="border-t mt-2 pt-2 text-lg font-bold">
     รวม: <span id="total">0</span> บาท
   </div>
 </div>
 
-<!-- ปุ่ม -->
-<button onclick="sendToKitchen()" class="w-full bg-emerald-600 py-3 rounded">
-  📤 ส่งเข้าครัว
+<button onclick="sendToKitchen()"
+  class="w-full bg-orange-500 py-3 rounded font-bold">
+  🍳 ส่งเข้าครัว
 </button>
 
-<!-- ========== MODAL ขนมจีน ========== -->
+<button onclick="cancelOrder()"
+  class="w-full bg-red-600 py-2 rounded">
+  ❌ ยกเลิกออเดอร์
+</button>
+
+<!-- ================= MODAL ADDON ================= -->
 <div id="addonModal" class="fixed inset-0 bg-black/70 hidden items-center justify-center">
   <div class="bg-slate-800 p-4 rounded w-80">
     <h2 id="addonTitle" class="font-bold mb-2 text-center"></h2>
 
-    <label class="block">
-      <input type="checkbox" id="addonSpecial"> พิเศษ +10
-    </label>
+    <label><input type="checkbox" id="addonSpecial"> พิเศษ +10</label><br>
+    <label><input type="checkbox" id="addonMix" onchange="toggleMix()"> ผสมน้ำ +10</label>
 
-    <label class="block mt-1">
-      <input type="checkbox" id="addonMix" onchange="toggleMix()"> ผสมน้ำ +10
-    </label>
-
-    <select id="mixSelect" class="w-full mt-1 hidden"></select>
+    <select id="mixSelect" class="w-full text-black mt-1 hidden"></select>
 
     <button onclick="confirmAddon()" class="mt-3 bg-emerald-600 w-full py-2 rounded">
       เพิ่มลงบิล
@@ -72,58 +59,33 @@ select,input{
 </div>
 
 <script>
-/* ================= CONFIG ================= */
+/* ================= SUPABASE ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ================= STATE ================= */
-let tables=[], products=[], categories=[];
-let currentOrder = null;
-let currentProduct = null;
+let categories=[], products=[], tables=[];
+let cart=[], currentProduct=null;
+let currentOrderId=null;
 
 /* ================= INIT ================= */
 async function init(){
-  tables = (await db.from('tables').select('*').order('name')).data || [];
-  products = (await db.from('products').select('*').eq('active',true)).data || [];
+  categories=(await db.from('categories').select('*')).data||[];
+  products=(await db.from('products').select('*').eq('active',true)).data||[];
+  tables=(await db.from('tables').select('*')).data||[];
 
-  categories = [...new Set(products.map(p=>p.category))];
-
-  renderTables();
   renderCategories();
+  if(categories.length) loadCategory(categories[0].name);
+  loadTables();
 }
-init();
 
 /* ================= TABLE ================= */
-function renderTables(){
-  tableSelect.innerHTML = '<option value="">-- เลือกโต๊ะ --</option>';
+function loadTables(){
+  tableSelect.innerHTML='<option value="">-- เลือกโต๊ะ --</option>';
   tables.forEach(t=>{
-    tableSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+    tableSelect.innerHTML+=`<option value="${t.id}">${t.name}</option>`;
   });
-  tableSelect.onchange = selectTable;
-}
-
-async function selectTable(){
-  const tableId = tableSelect.value;
-  if(!tableId) return;
-
-  const { data } = await db
-    .from('orders')
-    .select('*')
-    .eq('table_id',tableId)
-    .eq('status','open')
-    .single();
-
-  if(data){
-    currentOrder = data;
-    loadDraftItems();
-  }else{
-    const res = await db.from('orders')
-      .insert({ table_id:tableId, status:'open' })
-      .select()
-      .single();
-    currentOrder = res.data;
-  }
 }
 
 /* ================= CATEGORY ================= */
@@ -132,14 +94,13 @@ function renderCategories(){
   categories.forEach(c=>{
     const b=document.createElement('button');
     b.className='bg-slate-700 px-4 py-2 rounded';
-    b.innerText=c;
-    b.onclick=()=>loadMenu(c);
+    b.innerText=c.name;
+    b.onclick=()=>loadCategory(c.name);
     categoryBar.appendChild(b);
   });
-  if(categories[0]) loadMenu(categories[0]);
 }
 
-function loadMenu(cat){
+function loadCategory(cat){
   menu.innerHTML='';
   products.filter(p=>p.category===cat).forEach(p=>{
     const b=document.createElement('button');
@@ -152,106 +113,102 @@ function loadMenu(cat){
 
 /* ================= ADD ITEM ================= */
 function addItem(p){
-  if(!currentOrder){
-    Swal.fire('กรุณาเลือกโต๊ะก่อน');
-    return;
-  }
-
   if(p.category==='ขนมจีน'){
     currentProduct=p;
-    addonTitle.innerText=p.name;
+    addonTitle.innerText=`${p.name} (${p.price})`;
     buildMixOptions(p.name);
     addonModal.classList.replace('hidden','flex');
     return;
   }
 
-  insertItem(p.name,p.price);
+  const f=cart.find(i=>i.name===p.name);
+  f?f.qty++:cart.push({name:p.name,price:p.price,qty:1});
+  renderBill();
 }
 
-async function insertItem(name,price){
-  await db.from('order_items').insert({
-    order_id:currentOrder.id,
-    product_name:name,
-    price:price,
-    qty:1,
-    status:'draft'
-  });
-  loadDraftItems();
-}
-
-/* ================= MIX ================= */
 function buildMixOptions(main){
   mixSelect.innerHTML='<option value="">-- เลือกน้ำที่ผสม --</option>';
-  products.filter(p=>p.category==='ขนมจีน' && p.name!==main)
+  products.filter(p=>p.category==='ขนมจีน'&&p.name!==main)
     .forEach(p=>mixSelect.innerHTML+=`<option>${p.name}</option>`);
 }
+
 function toggleMix(){
   mixSelect.classList.toggle('hidden',!addonMix.checked);
 }
 
-async function confirmAddon(){
-  let name=currentProduct.name;
-  let price=currentProduct.price;
-  let opt=[];
-
-  if(addonSpecial.checked){ price+=10; opt.push('พิเศษ'); }
+function confirmAddon(){
+  let name=currentProduct.name, price=currentProduct.price, opt=[];
+  if(addonSpecial.checked){price+=10;opt.push('พิเศษ')}
   if(addonMix.checked){
-    if(!mixSelect.value) return;
-    price+=10;
-    opt.push(`ผสมน้ำ:${mixSelect.value}`);
+    if(!mixSelect.value)return alert('เลือกน้ำ');
+    price+=10;opt.push(`ผสมน้ำ:${mixSelect.value}`);
   }
-  if(opt.length) name+=` (${opt.join(',')})`;
+  if(opt.length)name+=` (${opt.join(', ')})`;
+  const f=cart.find(i=>i.name===name);
+  f?f.qty++:cart.push({name,price,qty:1});
+  closeAddon();renderBill();
+}
 
-  await insertItem(name,price);
-  closeAddon();
+function closeAddon(){
+  addonModal.classList.replace('flex','hidden');
+  addonSpecial.checked=false;addonMix.checked=false;
+  mixSelect.value='';mixSelect.classList.add('hidden');
 }
 
 /* ================= BILL ================= */
-async function loadDraftItems(){
-  const { data } = await db
-    .from('order_items')
-    .select('*')
-    .eq('order_id',currentOrder.id)
-    .eq('status','draft');
-
-  bill.innerHTML='';
-  let sum=0;
-
-  data.forEach(i=>{
-    bill.innerHTML+=`<div class="text-sm">${i.product_name} × ${i.qty} = ${i.qty*i.price}</div>`;
-    sum+=i.qty*i.price;
+function renderBill(){
+  bill.innerHTML='';let sum=0;
+  cart.forEach((i,idx)=>{
+    sum+=i.price*i.qty;
+    bill.innerHTML+=`
+      <div class="flex justify-between border-b py-1">
+        ${i.name} × ${i.qty}
+        <button onclick="removeItem(${idx})">✕</button>
+      </div>`;
   });
   total.innerText=sum;
 }
 
+function removeItem(i){cart.splice(i,1);renderBill();}
+
 /* ================= SEND TO KITCHEN ================= */
 async function sendToKitchen(){
-  if(!currentOrder) return;
+  if(!cart.length)return alert('ไม่มีรายการ');
+  if(!tableSelect.value)return alert('เลือกโต๊ะ');
 
-  await db.from('order_items')
-    .update({ status:'sent' })
-    .eq('order_id',currentOrder.id)
-    .eq('status','draft');
+  if(!currentOrderId){
+    const {data}=await db.from('orders')
+      .insert({table_id:tableSelect.value,status:'open'})
+      .select().single();
+    currentOrderId=data.id;
+  }
 
-  // 🔥 RESET UI
-  bill.innerHTML='';
-  total.innerText='0';
+  for(const i of cart){
+    await db.from('order_items').insert({
+      order_id:currentOrderId,
+      product_name:i.name,
+      price:i.price,
+      qty:i.qty
+    });
+  }
 
-  Swal.fire({
-    icon:'success',
-    title:'ส่งเข้าครัวแล้ว',
-    timer:1200,
-    showConfirmButton:false
-  });
+  /* 🔥 รีเซตหน้าจอ (ไม่รื้อ logic เดิม) */
+  cart=[];
+  renderBill();
+  closeAddon();
+
+  Swal.fire({icon:'success',title:'ส่งเข้าครัวแล้ว'});
 }
 
-/* ================= MODAL ================= */
-function closeAddon(){
-  addonModal.classList.replace('flex','hidden');
-  addonSpecial.checked=false;
-  addonMix.checked=false;
-  mixSelect.classList.add('hidden');
+/* ================= CANCEL ================= */
+function cancelOrder(){
+  cart=[];
+  renderBill();
+  closeAddon();
 }
+
+/* ================= START ================= */
+init();
 </script>
 
 </body>
