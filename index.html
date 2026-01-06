@@ -68,6 +68,15 @@ const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
 /* ================= CATEGORY ================= */
 function setCategory(cat) {
   currentCategory = cat
+
+  btnNoodle.className = "px-3 py-1 rounded bg-slate-600"
+  btnDrink.className  = "px-3 py-1 rounded bg-slate-600"
+  btnSnack.className  = "px-3 py-1 rounded bg-slate-600"
+
+  if (cat === 'ขนมจีน') btnNoodle.className = "px-3 py-1 rounded bg-orange-600"
+  if (cat === 'เครื่องดื่ม') btnDrink.className = "px-3 py-1 rounded bg-blue-600"
+  if (cat === 'ทานเล่น') btnSnack.className = "px-3 py-1 rounded bg-green-600"
+
   loadMenu()
 }
 
@@ -261,9 +270,13 @@ payBtn.addEventListener("click", async () => {
 })
 
 /* ================= INIT ================= */
-btn-noodle.addEventListener("click", () => setCategory('ขนมจีน'))
-btn-drink.addEventListener("click", () => setCategory('เครื่องดื่ม'))
-btn-snack.addEventListener("click", () => setCategory('ทานเล่น'))
+const btnNoodle = document.getElementById("btn-noodle")
+const btnDrink  = document.getElementById("btn-drink")
+const btnSnack  = document.getElementById("btn-snack")
+
+btnNoodle.addEventListener("click", () => setCategory('ขนมจีน'))
+btnDrink.addEventListener("click", () => setCategory('เครื่องดื่ม'))
+btnSnack.addEventListener("click", () => setCategory('ทานเล่น'))
 
 loadTables()
 loadMenu()
