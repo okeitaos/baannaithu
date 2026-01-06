@@ -7,9 +7,13 @@
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body class="bg-slate-900 text-white min-h-screen p-4">
+
+<!-- เสียงแจ้งเตือน -->
+<audio id="beepSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
 
 <div class="max-w-7xl mx-auto grid grid-cols-12 gap-4">
 
@@ -72,6 +76,7 @@ let noodleMenus = []
 let cart = []
 
 const restrictedMixTargets = ["แกงปู", "น้ำชุบหยำ"]
+const beep = document.getElementById("beepSound")
 
 /* ================= TABLES ================= */
 async function loadTables() {
@@ -152,6 +157,18 @@ async function loadMenu() {
         option_special: sp,
         mix_sauce_id: mixId
       })
+
+      beep.currentTime = 0
+      beep.play()
+
+      Swal.fire({
+        toast: true,
+        position: "top-end",
+        icon: "success",
+        title: "เพิ่มรายการแล้ว",
+        showConfirmButton: false,
+        timer: 1200
+      })
     }
 
     menuList.appendChild(card)
@@ -217,7 +234,27 @@ function renderCart() {
 
 /* ================= SEND ORDER ================= */
 async function submitOrder() {
-  if (!selectedTable || cart.length === 0) return
+  if (!selectedTable || cart.length === 0) {
+    Swal.fire("กรุณาเลือกโต๊ะและรายการอาหาร", "", "warning")
+    return
+  }
+
+  const confirm = await Swal.fire({
+    title: `ยืนยันส่งออร์เดอร์ โต๊ะ ${selectedTable.table_no}`,
+    text: `จำนวน ${cart.reduce((s,i)=>s+i.qty,0)} รายการ`,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "ส่งออร์เดอร์",
+    cancelButtonText: "ยกเลิก"
+  })
+
+  if (!confirm.isConfirmed) return
+
+  Swal.fire({
+    title: "กำลังส่งออร์เดอร์",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  })
 
   const { data: order } = await sb
     .from("orders")
@@ -245,7 +282,13 @@ async function submitOrder() {
   cart = []
   renderCart()
   loadTables()
-  alert("ส่งออร์เดอร์เรียบร้อย")
+
+  Swal.fire({
+    icon: "success",
+    title: "ส่งออร์เดอร์เรียบร้อย",
+    timer: 1500,
+    showConfirmButton: false
+  })
 }
 
 /* ================= INIT ================= */
