@@ -73,18 +73,14 @@ async function cancelItem(item) {
 }
 
 async function reduceItem(item) {
-  // ลดลง 1
   if (item.qty <= 1) {
-    // เหลือ 1 → ยกเลิกทั้งรายการ
     return cancelItem(item)
   }
 
-  // 1) update ตัวที่เหลือ
   await sb.from("order_items")
     .update({ qty: item.qty - 1 })
     .eq("id", item.id)
 
-  // 2) insert cancelled 1
   await sb.from("order_items").insert({
     order_id: item.order_id,
     product_id: item.product_id,
@@ -100,7 +96,7 @@ async function reduceItem(item) {
 
 /* ================= LOAD BILLS ================= */
 async function loadBills(playSound = false) {
-  await loadOrdersMap()   // ⭐ แก้ปัญหาเลขโต๊ะไม่ขึ้น
+  await loadOrdersMap()
 
   const { data } = await sb
     .from("order_items")
@@ -129,7 +125,7 @@ async function loadBills(playSound = false) {
             <div>${name} x ${it.qty}</div>
             <div class="flex gap-2">
               <button class="bg-yellow-500 px-2 rounded reduce">➖</button>
-              <button class="bg-red-600 px-2 rounded cancel">❌</button>
+              <button class="bg-white text-black px-2 rounded cancel">❌</button>
             </div>
           </div>
         </div>
