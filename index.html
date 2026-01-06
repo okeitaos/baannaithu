@@ -23,7 +23,6 @@
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-2">📋 เมนู</h2>
 
-    <!-- CATEGORY BUTTONS -->
     <div class="flex gap-2 mb-3">
       <button id="btn-noodle" class="px-3 py-1 rounded bg-orange-600">🍜 ขนมจีน</button>
       <button id="btn-drink" class="px-3 py-1 rounded bg-slate-600">🥤 เครื่องดื่ม</button>
@@ -56,7 +55,6 @@
 /* ================= CONFIG ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co"
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
-
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 
 /* ================= STATE ================= */
@@ -70,15 +68,6 @@ const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
 /* ================= CATEGORY ================= */
 function setCategory(cat) {
   currentCategory = cat
-
-  document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-slate-600"
-  document.getElementById("btn-drink").className  = "px-3 py-1 rounded bg-slate-600"
-  document.getElementById("btn-snack").className  = "px-3 py-1 rounded bg-slate-600"
-
-  if (cat === 'ขนมจีน') document.getElementById("btn-noodle").className = "px-3 py-1 rounded bg-orange-600"
-  if (cat === 'เครื่องดื่ม') document.getElementById("btn-drink").className = "px-3 py-1 rounded bg-blue-600"
-  if (cat === 'ทานเล่น') document.getElementById("btn-snack").className = "px-3 py-1 rounded bg-green-600"
-
   loadMenu()
 }
 
@@ -89,6 +78,7 @@ async function loadTables() {
 
   ;(data || []).forEach(t => {
     const btn = document.createElement("button")
+    btn.textContent = "โต๊ะ " + t.table_no
 
     let cls = "p-2 rounded font-bold "
     if (selectedTable?.id === t.id) cls += "bg-yellow-500"
@@ -96,9 +86,7 @@ async function loadTables() {
     else cls += "bg-green-600"
 
     btn.className = cls
-    btn.textContent = "โต๊ะ " + t.table_no
-    btn.onclick = () => selectTable(t)
-
+    btn.addEventListener("click", () => selectTable(t))
     tableList.appendChild(btn)
   })
 }
@@ -153,8 +141,10 @@ async function loadMenu() {
   menuList.innerHTML = ""
 
   ;(data || []).forEach(p => {
-    let options = ""
+    const div = document.createElement("div")
+    div.className = "bg-slate-700 p-3 rounded"
 
+    let options = ""
     if (p.category === 'ขนมจีน') {
       options += `
         <label class="block text-sm">
@@ -175,27 +165,26 @@ async function loadMenu() {
       }
     }
 
-    const div = document.createElement("div")
-    div.className = "bg-slate-700 p-3 rounded"
     div.innerHTML = `
       <div class="flex justify-between">
         <div>
           <div class="font-bold">${p.name}</div>
           <div class="text-sm">${p.price} บาท</div>
         </div>
-        <button class="bg-blue-600 px-3 rounded"
-          onclick="addItem('${p.id}', ${p.price}, '${p.name}')">
-          เพิ่ม
-        </button>
+        <button class="add-btn bg-blue-600 px-3 rounded">เพิ่ม</button>
       </div>
       <div class="mt-2">${options}</div>
     `
+
+    div.querySelector(".add-btn")
+      .addEventListener("click", () => addItem(p))
+
     menuList.appendChild(div)
   })
 }
 
 /* ================= ORDER ================= */
-async function addItem(id, base, name) {
+async function addItem(p) {
   if (!selectedTable) {
     alert("กรุณาเลือกโต๊ะก่อน")
     return
@@ -216,21 +205,16 @@ async function addItem(id, base, name) {
     loadTables()
   }
 
-  const sp = document.getElementById("sp_" + id)?.checked || false
-  const mixId = document.getElementById("mix_" + id)?.value || null
+  const sp = document.getElementById("sp_" + p.id)?.checked || false
+  const mixId = document.getElementById("mix_" + p.id)?.value || null
 
-  if (mixId && mixId === id) {
-    alert("❌ ไม่สามารถผสมกับตัวเองได้")
-    return
-  }
-
-  let price = base
+  let price = p.price
   if (sp) price += 10
   if (mixId) price += 10
 
   await sb.from("order_items").insert({
     order_id: currentOrderId,
-    product_id: id,
+    product_id: p.id,
     price,
     option_special: sp,
     option_mix: !!mixId,
@@ -246,7 +230,7 @@ async function loadOrderItems() {
 
   const { data } = await sb
     .from("order_items")
-    .select(`price, option_special, option_mix, products(name), mix:mix_sauce_id(name)`)
+    .select(`price, products(name), mix:mix_sauce_id(name)`)
     .eq("order_id", currentOrderId)
 
   let total = 0
@@ -254,20 +238,17 @@ async function loadOrderItems() {
 
   ;(data || []).forEach(i => {
     total += i.price
-    const div = document.createElement("div")
-    div.className = "bg-slate-700 p-2 rounded text-sm"
-    div.textContent =
-      i.products.name +
-      (i.option_special ? " (พิเศษ)" : "") +
-      (i.option_mix ? ` (ผสม ${i.mix?.name})` : "")
-    orderItems.appendChild(div)
+    const d = document.createElement("div")
+    d.className = "bg-slate-700 p-2 rounded text-sm"
+    d.textContent = i.products.name + (i.mix ? ` (ผสม ${i.mix.name})` : "")
+    orderItems.appendChild(d)
   })
 
   totalPrice.textContent = total + " ฿"
 }
 
 /* ================= PAY ================= */
-document.getElementById("payBtn").onclick = async () => {
+payBtn.addEventListener("click", async () => {
   if (!currentOrderId) return
 
   await sb.from("orders").update({ status: "paid" }).eq("id", currentOrderId)
@@ -277,12 +258,12 @@ document.getElementById("payBtn").onclick = async () => {
 
   alert("ชำระเงินเรียบร้อย")
   location.reload()
-}
+})
 
 /* ================= INIT ================= */
-document.getElementById("btn-noodle").onclick = () => setCategory('ขนมจีน')
-document.getElementById("btn-drink").onclick  = () => setCategory('เครื่องดื่ม')
-document.getElementById("btn-snack").onclick  = () => setCategory('ทานเล่น')
+btn-noodle.addEventListener("click", () => setCategory('ขนมจีน'))
+btn-drink.addEventListener("click", () => setCategory('เครื่องดื่ม'))
+btn-snack.addEventListener("click", () => setCategory('ทานเล่น'))
 
 loadTables()
 loadMenu()
