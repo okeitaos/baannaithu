@@ -13,35 +13,56 @@
 
 <div class="grid grid-cols-12 gap-4 max-w-7xl mx-auto">
 
-  <!-- TABLES -->
+  <!-- ================= TABLES ================= -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">🪑 โต๊ะว่าง</h2>
     <div id="tableList" class="grid grid-cols-2 gap-2"></div>
   </div>
 
-  <!-- MENU -->
+  <!-- ================= MENU ================= -->
   <div class="col-span-5 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">📋 เมนู</h2>
+    <h2 class="font-bold mb-2">📋 เมนู</h2>
+
+    <!-- CATEGORY BUTTONS -->
+    <div class="flex gap-2 mb-3">
+      <button onclick="setCategory('ขนมจีน')" id="btn-ขนมจีน"
+        class="px-3 py-1 rounded bg-orange-600">
+        🍜 ขนมจีน
+      </button>
+      <button onclick="setCategory('เครื่องดื่ม')" id="btn-เครื่องดื่ม"
+        class="px-3 py-1 rounded bg-slate-600">
+        🥤 เครื่องดื่ม
+      </button>
+      <button onclick="setCategory('ทานเล่น')" id="btn-ทานเล่น"
+        class="px-3 py-1 rounded bg-slate-600">
+        🍢 ทานเล่น
+      </button>
+    </div>
+
     <div id="menuList" class="space-y-2"></div>
   </div>
 
-  <!-- ORDER -->
+  <!-- ================= ORDER ================= -->
   <div class="col-span-4 bg-slate-800 rounded-xl p-4">
     <h2 class="font-bold mb-3">
       🧾 โต๊ะ <span id="currentTable">-</span>
     </h2>
+
     <div id="orderItems" class="space-y-2 mb-3"></div>
+
     <div class="border-t pt-3">
       <div class="flex justify-between font-bold">
         <span>รวม</span>
         <span id="totalPrice">0 ฿</span>
       </div>
+
       <button onclick="payOrder()"
         class="w-full mt-3 bg-green-600 py-2 rounded">
         💰 คิดเงิน
       </button>
     </div>
   </div>
+
 </div>
 
 <script>
@@ -53,9 +74,25 @@ const sb = supabase.createClient(
 
 const restrictedMixTargets = ['แกงปู', 'น้ำชุบหยำ']
 
+let currentCategory = 'ขนมจีน'
 let currentOrderId = null
 let currentTableId = null
 let noodleMenus = []
+
+/* ================= CATEGORY ================= */
+function setCategory(cat) {
+  currentCategory = cat
+
+  ['ขนมจีน','เครื่องดื่ม','ทานเล่น'].forEach(c => {
+    document.getElementById(`btn-${c}`)
+      .className = 'px-3 py-1 rounded bg-slate-600'
+  })
+
+  document.getElementById(`btn-${cat}`)
+    .className = 'px-3 py-1 rounded bg-orange-600'
+
+  loadMenu()
+}
 
 /* ================= TABLES ================= */
 async function loadTables() {
@@ -67,11 +104,11 @@ async function loadTables() {
 
   tableList.innerHTML = ""
   data.forEach(t => {
-    const b = document.createElement("button")
-    b.className = "bg-green-600 rounded p-2"
-    b.textContent = "โต๊ะ " + t.table_no
-    b.onclick = () => openTable(t)
-    tableList.appendChild(b)
+    const btn = document.createElement("button")
+    btn.className = "bg-green-600 rounded p-2"
+    btn.textContent = "โต๊ะ " + t.table_no
+    btn.onclick = () => openTable(t)
+    tableList.appendChild(btn)
   })
 }
 
@@ -79,10 +116,14 @@ async function openTable(t) {
   const { data: order } = await sb
     .from("orders")
     .insert({ table_id: t.id })
-    .select().single()
+    .select()
+    .single()
 
   await sb.from("tables")
-    .update({ status: "occupied", current_order_id: order.id })
+    .update({
+      status: "occupied",
+      current_order_id: order.id
+    })
     .eq("id", t.id)
 
   currentOrderId = order.id
@@ -93,44 +134,67 @@ async function openTable(t) {
   loadTables()
 }
 
-/* ================= MENU ================= */
+/* ================= MIX RULE ================= */
 function getAllowedMixOptions(mainName) {
+
+  // เมนูหลัก = แกงปู / น้ำชุบหยำ
   if (restrictedMixTargets.includes(mainName)) {
-    return noodleMenus.filter(n => n.name !== mainName)
+    return noodleMenus.filter(
+      n => n.name !== mainName
+    )
   }
+
+  // เมนูอื่น
   return noodleMenus.filter(
-    n => !restrictedMixTargets.includes(n.name)
+    n =>
+      !restrictedMixTargets.includes(n.name) &&
+      n.name !== mainName
   )
 }
 
+/* ================= MENU ================= */
 async function loadMenu() {
+
+  // โหลดเมนูตามหมวด
   const { data } = await sb
     .from("products")
     .select("*")
     .eq("active", true)
-    .order("category, price")
+    .eq("category", currentCategory)
+    .order("price")
 
+  // โหลดขนมจีนทั้งหมดไว้ใช้ผสม
+  const { data: noodles } = await sb
+    .from("products")
+    .select("*")
+    .eq("active", true)
+    .eq("category", "ขนมจีน")
+
+  noodleMenus = noodles || []
   menuList.innerHTML = ""
-  noodleMenus = data.filter(p => p.category === 'ขนมจีน')
 
   data.forEach(p => {
+
     let options = ""
 
     if (p.category === 'ขนมจีน') {
       options += `
         <label class="block text-sm">
-          <input type="checkbox" id="sp_${p.id}"> พิเศษ (+10)
+          <input type="checkbox" id="sp_${p.id}">
+          พิเศษ (+10)
         </label>
       `
 
       const mixes = getAllowedMixOptions(p.name)
       if (mixes.length) {
         options += `
-          <label class="block text-sm">
+          <label class="block text-sm mt-1">
             ผสม (+10)
             <select id="mix_${p.id}" class="text-black ml-1">
               <option value="">-- ไม่ผสม --</option>
-              ${mixes.map(m => `<option value="${m.id}">${m.name}</option>`).join("")}
+              ${mixes.map(m =>
+                `<option value="${m.id}">${m.name}</option>`
+              ).join("")}
             </select>
           </label>
         `
@@ -139,6 +203,7 @@ async function loadMenu() {
 
     const div = document.createElement("div")
     div.className = "bg-slate-700 p-3 rounded"
+
     div.innerHTML = `
       <div class="flex justify-between">
         <div>
@@ -160,18 +225,27 @@ async function loadMenu() {
 async function addItem(id, base, name) {
   if (!currentOrderId) return alert("เลือกโต๊ะก่อน")
 
-  const sp = document.getElementById("sp_" + id)?.checked || false
-  const mixId = document.getElementById("mix_" + id)?.value || null
+  const special =
+    document.getElementById("sp_" + id)?.checked || false
+
+  const mixSelect = document.getElementById("mix_" + id)
+  const mixId = mixSelect?.value || null
+
+  // 🔒 ห้ามผสมกับตัวเอง
+  if (mixId && mixId === id) {
+    alert("❌ ไม่สามารถผสมกับตัวเองได้")
+    return
+  }
 
   let price = base
-  if (sp) price += 10
+  if (special) price += 10
   if (mixId) price += 10
 
   await sb.from("order_items").insert({
     order_id: currentOrderId,
     product_id: id,
     price,
-    option_special: sp,
+    option_special: special,
     option_mix: !!mixId,
     mix_sauce_id: mixId
   })
@@ -179,12 +253,19 @@ async function addItem(id, base, name) {
   loadOrderItems()
 }
 
+/* ================= ORDER ITEMS ================= */
 async function loadOrderItems() {
   if (!currentOrderId) return
 
   const { data } = await sb
     .from("order_items")
-    .select("price, option_special, option_mix, products(name), mix:mix_sauce_id(name)")
+    .select(`
+      price,
+      option_special,
+      option_mix,
+      products(name),
+      mix:mix_sauce_id(name)
+    `)
     .eq("order_id", currentOrderId)
 
   let total = 0
@@ -217,7 +298,10 @@ async function payOrder() {
     .eq("id", currentOrderId)
 
   await sb.from("tables")
-    .update({ status: "available", current_order_id: null })
+    .update({
+      status: "available",
+      current_order_id: null
+    })
     .eq("id", currentTableId)
 
   alert("ชำระเงินเรียบร้อย")
@@ -236,8 +320,10 @@ sb.channel("pos")
   )
   .subscribe()
 
+/* ================= INIT ================= */
 loadTables()
 loadMenu()
 </script>
+
 </body>
 </html>
