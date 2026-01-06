@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🍳 Kitchen Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+
+<body class="bg-slate-900 text-white p-4">
+
+<h1 class="text-2xl font-bold text-center mb-4">🍳 ครัว</h1>
+
+<div id="orderList" class="space-y-4"></div>
+
+<script>
+/* ================= SUPABASE ================= */
+const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ================= LOAD ORDERS ================= */
+async function loadOrders(){
+  const { data: orders } = await db
+    .from('orders')
+    .select(`
+      id,
+      status,
+      created_at,
+      tables(name),
+      order_items (
+        product_name,
+        qty
+      )
+    `)
+    .eq('status','open')
+    .order('created_at',{ ascending:true });
+
+  orderList.innerHTML='';
+
+  if(!orders.length){
+    orderList.innerHTML = `<div class="text-center text-slate-400">ไม่มีออเดอร์</div>`;
+    return;
+  }
+
+  orders.forEach(o=>{
+    const card = document.createElement('div');
+    card.className = 'bg-slate-800 p-4 rounded-xl border border-slate-700';
+
+    card.innerHTML = `
+      <div class="flex justify-between mb-2">
+        <div class="font-bold text-lg">🪑 โต๊ะ ${o.tables?.name || '-'}</div>
+        <div class="text-sm text-slate-400">
+          ${new Date(o.created_at).toLocaleTimeString('th-TH')}
+        </div>
+      </div>
+
+      <div class="space-y-1 mb-3">
+        ${o.order_items.map(i=>`
+          <div class="flex justify-between text-sm">
+            <span>${i.product_name}</span>
+            <span>x${i.qty}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <button
+        onclick="markDone('${o.id}')"
+        class="w-full bg-emerald-600 py-2 rounded font-bold">
+        ✅ ทำเสร็จแล้ว
+      </button>
+    `;
+
+    orderList.appendChild(card);
+  });
+}
+
+/* ================= MARK DONE ================= */
+async function markDone(orderId){
+  const r = await Swal.fire({
+    title:'ทำออเดอร์นี้เสร็จแล้ว?',
+    icon:'question',
+    showCancelButton:true,
+    confirmButtonText:'เสร็จแล้ว',
+    cancelButtonText:'ยัง'
+  });
+
+  if(!r.isConfirmed) return;
+
+  await db.from('orders')
+    .update({ status:'done' })
+    .eq('id',orderId);
+
+  loadOrders();
+}
+
+/* ================= REALTIME ================= */
+db.channel('kitchen-orders')
+  .on(
+    'postgres_changes',
+    { event:'*', schema:'public', table:'orders' },
+    () => loadOrders()
+  )
+  .subscribe();
+
+/* ================= START ================= */
+loadOrders();
+</script>
+
+</body>
+</html>
