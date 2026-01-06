@@ -20,17 +20,18 @@
 /* ================= SUPABASE ================= */
 const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss";
+
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ================= LOAD ORDERS ================= */
 async function loadOrders(){
-  const { data: orders } = await db
+  const { data: orders, error } = await db
     .from('orders')
     .select(`
       id,
       status,
       created_at,
-      tables(name),
+      tables ( name ),
       order_items (
         product_name,
         qty
@@ -39,32 +40,46 @@ async function loadOrders(){
     .eq('status','open')
     .order('created_at',{ ascending:true });
 
-  orderList.innerHTML='';
+  if(error){
+    console.error(error);
+    return;
+  }
 
-  if(!orders.length){
-    orderList.innerHTML = `<div class="text-center text-slate-400">ไม่มีออเดอร์</div>`;
+  orderList.innerHTML = '';
+
+  if(!orders || !orders.length){
+    orderList.innerHTML =
+      `<div class="text-center text-slate-400">ไม่มีออเดอร์</div>`;
     return;
   }
 
   orders.forEach(o=>{
     const card = document.createElement('div');
-    card.className = 'bg-slate-800 p-4 rounded-xl border border-slate-700';
+    card.className =
+      'bg-slate-800 p-4 rounded-xl border border-slate-700';
 
     card.innerHTML = `
       <div class="flex justify-between mb-2">
-        <div class="font-bold text-lg">🪑 โต๊ะ ${o.tables?.name || '-'}</div>
+        <div class="font-bold text-lg">
+          🪑 โต๊ะ ${o.tables?.name || '-'}
+        </div>
         <div class="text-sm text-slate-400">
-          ${new Date(o.created_at).toLocaleTimeString('th-TH')}
+          ${new Date(o.created_at)
+            .toLocaleTimeString('th-TH',{ hour:'2-digit', minute:'2-digit' })}
         </div>
       </div>
 
       <div class="space-y-1 mb-3">
-        ${o.order_items.map(i=>`
-          <div class="flex justify-between text-sm">
-            <span>${i.product_name}</span>
-            <span>x${i.qty}</span>
-          </div>
-        `).join('')}
+        ${
+          o.order_items && o.order_items.length
+          ? o.order_items.map(i=>`
+              <div class="flex justify-between text-sm">
+                <span>${i.product_name}</span>
+                <span>x${i.qty}</span>
+              </div>
+            `).join('')
+          : `<div class="text-slate-400 text-sm">กำลังโหลดรายการ...</div>`
+        }
       </div>
 
       <button
@@ -90,7 +105,8 @@ async function markDone(orderId){
 
   if(!r.isConfirmed) return;
 
-  await db.from('orders')
+  await db
+    .from('orders')
     .update({ status:'done' })
     .eq('id',orderId);
 
@@ -98,12 +114,22 @@ async function markDone(orderId){
 }
 
 /* ================= REALTIME ================= */
-db.channel('kitchen-orders')
+const channel = db.channel('kitchen-realtime')
+
+  // ฟัง orders
   .on(
     'postgres_changes',
     { event:'*', schema:'public', table:'orders' },
     () => loadOrders()
   )
+
+  // ฟัง order_items (ตัวแก้ปัญหาหลัก)
+  .on(
+    'postgres_changes',
+    { event:'*', schema:'public', table:'order_items' },
+    () => loadOrders()
+  )
+
   .subscribe();
 
 /* ================= START ================= */
