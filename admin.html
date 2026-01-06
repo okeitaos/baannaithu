@@ -210,6 +210,12 @@ function thaiRange(d){
   <div class="font-bold">รวม: <span id="dailyTotal" class="text-emerald-400">0</span> บาท</div>
   <button onclick="exportExcel()" class="bg-emerald-600 px-3 py-1 rounded">📤 Export Excel</button>
   <div id="billList" class="space-y-2 text-sm"></div>
+  <button
+  onclick="clearAllBills()"
+  class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded">
+  🧹 เคลียร์บิลทั้งหมด (วันนี้)
+</button>
+
 </section>
 
 <!-- ================= CHART ================= -->
@@ -472,6 +478,74 @@ async function drawProductChart(){
   });
 }
 
+async function clearAllBills(){
+  const d = billDate.value;
+  if(!d) return;
+
+  const confirm = await Swal.fire({
+    title: 'ยืนยันการลบ',
+    html: `
+      <div style="text-align:left">
+        ⚠️ การกระทำนี้จะ:
+        <ul>
+          <li>ลบบิลทั้งหมดของวันที่เลือก</li>
+          <li>ลบรายการสินค้าในบิลทั้งหมด</li>
+          <li><b>ไม่สามารถกู้คืนได้</b></li>
+        </ul>
+      </div>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'ลบทั้งหมด',
+    confirmButtonColor: '#dc2626',
+    cancelButtonText: 'ยกเลิก'
+  });
+
+  if(!confirm.isConfirmed) return;
+
+  const { start, end } = thaiRange(d);
+
+  /* 1️⃣ ดึง order id ของวันนั้น */
+  const { data: orders, error: err1 } = await db
+    .from('orders')
+    .select('id')
+    .gte('created_at', start)
+    .lte('created_at', end);
+
+  if(err1 || !orders.length){
+    Swal.fire('ไม่พบบิล', 'ไม่มีข้อมูลในวันที่เลือก', 'info');
+    return;
+  }
+
+  const orderIds = orders.map(o => o.id);
+
+  /* 2️⃣ ลบ order_items ก่อน (สำคัญ) */
+  const { error: err2 } = await db
+    .from('order_items')
+    .delete()
+    .in('order_id', orderIds);
+
+  if(err2){
+    Swal.fire('ผิดพลาด', err2.message, 'error');
+    return;
+  }
+
+  /* 3️⃣ ลบ orders */
+  const { error: err3 } = await db
+    .from('orders')
+    .delete()
+    .in('id', orderIds);
+
+  if(err3){
+    Swal.fire('ผิดพลาด', err3.message, 'error');
+    return;
+  }
+
+  Toast.fire({ icon:'success', title:'เคลียร์บิลทั้งหมดแล้ว' });
+
+  // refresh UI
+  loadBills();
+}
 
 /* ================= INIT ================= */
 loadCategories();
@@ -479,6 +553,7 @@ loadProducts();
 loadTables();
 billDate.value=new Date().toISOString().split('T')[0];
 loadBills();
+  
 </script>
 
 </body>
