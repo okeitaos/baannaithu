@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>👨‍🍳 Kitchen (By Bill)</title>
+<title>👨‍🍳 Kitchen</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -15,198 +15,117 @@
 <body class="bg-slate-900 text-white min-h-screen p-4">
 
 <div class="max-w-7xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว (จัดการออร์เดอร์)</h1>
+  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว</h1>
   <div id="billList" class="grid md:grid-cols-2 gap-4"></div>
 </div>
 
 <script>
-/* ================= CONFIG ================= */
 const sb = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
 
-/* ================= STATE ================= */
 const billList = document.getElementById("billList")
 let productMap = {}
 let tableMap = {}
 let orderTableMap = {}
 
-/* ================= MASTER ================= */
+/* ===== master ===== */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
-  ;(data || []).forEach(p => productMap[p.id] = p.name)
+  data.forEach(p => productMap[p.id] = p.name)
 }
 
 async function loadTables() {
   const { data } = await sb.from("tables").select("id,table_no")
-  ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
+  data.forEach(t => tableMap[t.id] = t.table_no)
 }
 
 async function loadOrdersMap() {
-  const { data } = await sb
-    .from("orders")
-    .select("id,table_id")
-    .eq("status", "open")
-
+  const { data } = await sb.from("orders").select("id,table_id").eq("status","open")
   orderTableMap = {}
-  ;(data || []).forEach(o => {
-    orderTableMap[o.id] = tableMap[o.table_id] || "-"
-  })
+  data.forEach(o => orderTableMap[o.id] = tableMap[o.table_id])
 }
 
-/* ================= LOAD BILLS ================= */
+/* ===== load ===== */
 async function loadBills() {
   billList.innerHTML = ""
 
-  const { data, error } = await sb
+  const { data } = await sb
     .from("order_items")
     .select("*")
-    .eq("status", "pending")
-    .order("created_at", { ascending: true })
+    .eq("status","pending")
+    .order("created_at",{ascending:true})
 
-  if (error) {
-    console.error(error)
-    return
-  }
-
-  const bills = {}
-  ;(data || []).forEach(item => {
-    if (!bills[item.order_id]) bills[item.order_id] = []
-    bills[item.order_id].push(item)
+  const grouped = {}
+  data.forEach(it => {
+    if (!grouped[it.order_id]) grouped[it.order_id] = []
+    grouped[it.order_id].push(it)
   })
 
-  for (const [orderId, items] of Object.entries(bills)) {
-    const tableNo = orderTableMap[orderId] || "-"
-
+  Object.entries(grouped).forEach(([orderId, items]) => {
     const card = document.createElement("div")
-    card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
-
-    let itemsHTML = ""
-
-    items.forEach(it => {
-      const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
-
-      itemsHTML += `
-        <div class="flex justify-between items-center border-b border-slate-700 py-1">
-          <div class="flex-1">
-            ${name}
-            ${it.option_special ? "(พิเศษ)" : ""}
-          </div>
-
-          <div class="flex items-center gap-2">
-            <button class="dec bg-slate-600 px-2 rounded">−</button>
-            <span class="font-bold">${it.qty}</span>
-            <button class="inc bg-slate-600 px-2 rounded">+</button>
-            <button class="split bg-blue-600 px-2 rounded">⇄</button>
-            <button class="cancel text-white bg-red-600 px-2 rounded">✕</button>
-          </div>
-        </div>
-      `
-    })
+    card.className = "bg-slate-800 p-4 rounded-xl"
 
     card.innerHTML = `
-      <div class="flex justify-between mb-3">
-        <div class="font-bold text-lg">🍽️ โต๊ะ ${tableNo}</div>
-      </div>
-      ${itemsHTML}
+      <div class="font-bold mb-2">🍽️ โต๊ะ ${orderTableMap[orderId] || "-"}</div>
+      ${items.map(it => `
+        <div class="flex justify-between items-center border-b py-1">
+          <div>${productMap[it.product_id]}</div>
+          <div class="flex gap-2">
+            <button data-dec="${it.id}" class="bg-slate-600 px-2 rounded">−</button>
+            <span>${it.qty}</span>
+            <button data-inc="${it.id}" class="bg-slate-600 px-2 rounded">+</button>
+            <button data-cancel="${it.id}" class="bg-red-600 px-2 rounded">✕</button>
+          </div>
+        </div>
+      `).join("")}
     `
 
-    /* ===== bind actions ===== */
-    const rows = card.querySelectorAll(".border-b")
-    rows.forEach((row, index) => {
-      const item = items[index]
-
-      // ลด
-      row.querySelector(".dec").onclick = () =>
-        updateQty(item, item.qty - 1)
-
-      // เพิ่ม
-      row.querySelector(".inc").onclick = () =>
-        updateQty(item, item.qty + 1)
-
-      // split
-      row.querySelector(".split").onclick = () =>
-        splitItem(item)
-
-      // cancel
-      row.querySelector(".cancel").onclick = () =>
-        cancelItem(item)
-    })
-
     billList.appendChild(card)
-  }
-}
-
-/* ================= ACTIONS ================= */
-
-// update qty
-async function updateQty(item, newQty) {
-  if (newQty <= 0) {
-    await cancelItem(item)
-    return
-  }
-
-  await sb
-    .from("order_items")
-    .update({ qty: newQty })
-    .eq("id", item.id)
-
-  loadBills()
-}
-
-// cancel item
-async function cancelItem(item) {
-  const confirm = await Swal.fire({
-    title: "ยกเลิกรายการนี้?",
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "ยกเลิก",
-    cancelButtonText: "ไม่"
   })
-
-  if (!confirm.isConfirmed) return
-
-  await sb
-    .from("order_items")
-    .update({ status: "cancelled" })
-    .eq("id", item.id)
-
-  loadBills()
 }
 
-// split item
-async function splitItem(item) {
-  if (item.qty < 2) {
-    Swal.fire("ไม่สามารถแยกได้", "จำนวนต้องมากกว่า 1", "info")
-    return
+/* ===== actions ===== */
+document.addEventListener("click", async e => {
+  const dec = e.target.dataset.dec
+  const inc = e.target.dataset.inc
+  const cancel = e.target.dataset.cancel
+
+  if (cancel) {
+    const res = await Swal.fire({
+      title: "ยกเลิกรายการนี้?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "ยกเลิก",
+      cancelButtonText: "ไม่"
+    })
+    if (!res.isConfirmed) return
+
+    await sb.from("order_items")
+      .update({ status:"cancelled" })
+      .eq("id", cancel)
+
+    loadBills()
   }
 
-  // ลดของเดิม
-  await sb
-    .from("order_items")
-    .update({ qty: item.qty - 1 })
-    .eq("id", item.id)
+  if (dec || inc) {
+    const id = dec || inc
+    const { data:[item] } = await sb.from("order_items").select("*").eq("id",id)
+    const newQty = dec ? item.qty - 1 : item.qty + 1
 
-  // เพิ่มรายการใหม่ qty = 1
-  await sb
-    .from("order_items")
-    .insert({
-      order_id: item.order_id,
-      product_id: item.product_id,
-      qty: 1,
-      price: item.price,
-      status: "pending",
-      option_special: item.option_special,
-      option_mix: item.option_mix,
-      mix_sauce_id: item.mix_sauce_id
-    })
+    if (newQty <= 0) {
+      await sb.from("order_items").update({status:"cancelled"}).eq("id",id)
+    } else {
+      await sb.from("order_items").update({qty:newQty}).eq("id",id)
+    }
 
-  loadBills()
-}
+    loadBills()
+  }
+})
 
-/* ================= INIT ================= */
-;(async () => {
+/* ===== init ===== */
+;(async()=>{
   await loadProducts()
   await loadTables()
   await loadOrdersMap()
