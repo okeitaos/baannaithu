@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<title>📊 Dashboard PRO ULTRA</title>
+<title>📊 Dashboard PRO ULTRA (Fixed)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -129,115 +129,157 @@ function monthRange(offset){
 async function loadDashboard(){
   const start = rangeStart(rangeSelect.value)
 
-  const { data } = await sb
+  /* 1️⃣ ดึงบิลที่จ่ายเงินจริง */
+  const { data: paidOrders } = await sb
+    .from("orders")
+    .select("id,created_at")
+    .eq("status","paid")
+    .gte("created_at", start)
+
+  const billCount = (paidOrders || []).length
+
+  /* 2️⃣ ดึงรายการขายจริง */
+  const { data: items } = await sb
     .from("order_items")
     .select("product_id,qty,price,created_at")
     .eq("status","done")
     .gte("created_at", start)
 
-  const rows = data || []
+  const rows = items || []
 
-  let revenue=0, daily={}, menu={}, hours={}
+  let revenue = 0
+  let daily = {}
+  let menu = {}
+  let hours = {}
 
   rows.forEach(r=>{
-    const amount=r.price*r.qty
-    revenue+=amount
+    const amount = r.price * r.qty
+    revenue += amount
 
-    const day=r.created_at.slice(0,10)
-    daily[day]=(daily[day]||0)+amount
+    const day = r.created_at.slice(0,10)
+    daily[day] = (daily[day] || 0) + amount
 
-    menu[r.product_id]=(menu[r.product_id]||0)+r.qty
+    menu[r.product_id] = (menu[r.product_id] || 0) + r.qty
 
-    const h=new Date(r.created_at).getHours()
-    if(h>=16 && h<=22) hours[h]=(hours[h]||0)+amount
+    const h = new Date(r.created_at).getHours()
+    if(h>=16 && h<=22) hours[h] = (hours[h] || 0) + amount
   })
 
-  const days=Object.keys(daily).length||1
-  const bills=days
+  /* KPI */
+  kpiRevenue.textContent = revenue.toLocaleString()
+  kpiBills.textContent = billCount
+  kpiAvg.textContent =
+    billCount > 0
+      ? Math.round(revenue / billCount).toLocaleString()
+      : "0"
 
-  kpiRevenue.textContent=revenue.toLocaleString()
-  kpiBills.textContent=bills
-  kpiAvg.textContent=Math.round(revenue/bills||0).toLocaleString()
-  kpiForecast.textContent=Math.round((revenue/days)*7).toLocaleString()
+  const activeDays = Object.keys(daily).length
+  kpiForecast.textContent =
+    activeDays > 0
+      ? Math.round((revenue / activeDays) * 7).toLocaleString()
+      : "0"
 
+  /* Chart */
   if(chart) chart.destroy()
-  chart=new Chart(revenueChart,{
+  chart = new Chart(revenueChart,{
     type:"line",
-    data:{ labels:Object.keys(daily),
-      datasets:[{ label:"รายได้", data:Object.values(daily), borderColor:"#22c55e", tension:.3 }]
+    data:{
+      labels:Object.keys(daily),
+      datasets:[{
+        label:"รายได้",
+        data:Object.values(daily),
+        borderColor:"#22c55e",
+        tension:.3
+      }]
     }
   })
 
+  /* Menu analysis */
   pushMenu.innerHTML=""
   cutMenu.innerHTML=""
-  const totalQty=Object.values(menu).reduce((a,b)=>a+b,0)||1
+  const totalQty = Object.values(menu).reduce((a,b)=>a+b,0) || 1
 
   Object.entries(menu).forEach(([id,qty])=>{
-    const name=productName[id]||"ไม่ทราบ"
-    const ratio=qty/totalQty
-    if(ratio>0.2) pushMenu.innerHTML+=`<li>${name} (${qty})</li>`
-    if(ratio<0.05) cutMenu.innerHTML+=`<li>${name} (${qty})</li>`
+    const name = productName[id] || "ไม่ทราบชื่อ"
+    const ratio = qty / totalQty
+    if(ratio > 0.2) pushMenu.innerHTML += `<li>${name} (${qty})</li>`
+    if(ratio < 0.05) cutMenu.innerHTML += `<li>${name} (${qty})</li>`
   })
 
+  /* Insight */
   insightBox.innerHTML=""
-  const peak=Object.entries(hours).sort((a,b)=>b[1]-a[1])[0]
-  if(peak) insightBox.innerHTML+=`<li>ช่วงพีค: ${peak[0]}:00 – ${peak[0]}:59</li>`
-  if(revenue/days>5000) insightBox.innerHTML+=`<li>ยอดเฉลี่ยต่อวันดี ควรเพิ่มโปรเสริม</li>`
+  const peak = Object.entries(hours).sort((a,b)=>b[1]-a[1])[0]
+  if(peak) insightBox.innerHTML += `<li>ช่วงพีค: ${peak[0]}:00 – ${peak[0]}:59</li>`
+  if(revenue === 0) insightBox.innerHTML += `<li>ยังไม่มีข้อมูลการขายในช่วงนี้</li>`
 }
 
 /* ================= MoM + AI ================= */
 async function loadMoMAndAI(){
-  const cur=monthRange(0)
-  const prev=monthRange(-1)
+  const cur = monthRange(0)
+  const prev = monthRange(-1)
 
-  const [c,p]=await Promise.all([
+  const [c,p] = await Promise.all([
     sb.from("order_items").select("product_id,qty,price").eq("status","done").gte("created_at",cur.start).lte("created_at",cur.end),
     sb.from("order_items").select("product_id,qty,price").eq("status","done").gte("created_at",prev.start).lte("created_at",prev.end)
   ])
 
-  const sum=r=>r.reduce((s,i)=>s+i.price*i.qty,0)
-  const curTotal=sum(c.data||[])
-  const prevTotal=sum(p.data||[])
-  const diff=prevTotal?(((curTotal-prevTotal)/prevTotal)*100).toFixed(1):"100"
+  const sum = r => r.reduce((s,i)=>s+i.price*i.qty,0)
+  const curTotal = sum(c.data||[])
+  const prevTotal = sum(p.data||[])
+  const diff = prevTotal ? (((curTotal-prevTotal)/prevTotal)*100).toFixed(1) : "0"
 
-  momCompare.innerHTML=`
+  momCompare.innerHTML = `
     <div>เดือนนี้: <b>${curTotal.toLocaleString()}</b> บาท</div>
     <div>เดือนก่อน: <b>${prevTotal.toLocaleString()}</b> บาท</div>
-    <div>แนวโน้ม: <b class="${diff>=0?'text-green-400':'text-red-400'}">${diff}%</b></div>
+    <div>แนวโน้ม:
+      <b class="${diff>=0?'text-green-400':'text-red-400'}">
+        ${diff}%
+      </b>
+    </div>
   `
 
-  const map=r=>{
+  const map = r=>{
     const m={}
     r.forEach(i=>m[i.product_id]=(m[i.product_id]||0)+i.qty)
     return m
   }
 
-  const cm=map(c.data||[])
-  const pm=map(p.data||[])
+  const cm = map(c.data||[])
+  const pm = map(p.data||[])
 
   aiRecommend.innerHTML=""
   Object.keys(productName).forEach(id=>{
-    const c=cm[id]||0, p=pm[id]||0
-    if(c>=p*1.5 && c>=5) aiRecommend.innerHTML+=`<li>🔥 ${productName[id]} โต → ควรดัน</li>`
-    else if(c<=p*0.5 && p>=5) aiRecommend.innerHTML+=`<li>⚠️ ${productName[id]} ยอดตก</li>`
-    else if(c<=1 && p<=1) aiRecommend.innerHTML+=`<li>🧊 ${productName[id]} ขายต่ำ → พิจารณาตัด</li>`
+    const cQty = cm[id]||0
+    const pQty = pm[id]||0
+
+    if(cQty>=pQty*1.5 && cQty>=5)
+      aiRecommend.innerHTML+=`<li>🔥 ${productName[id]} กำลังโต → ควรดัน</li>`
+    else if(cQty<=pQty*0.5 && pQty>=5)
+      aiRecommend.innerHTML+=`<li>⚠️ ${productName[id]} ยอดตก → ตรวจสอบ</li>`
+    else if(cQty<=1 && pQty<=1)
+      aiRecommend.innerHTML+=`<li>🧊 ${productName[id]} ขายต่ำ → พิจารณาตัด</li>`
   })
 
-  if(!aiRecommend.innerHTML) aiRecommend.innerHTML="<li>ยังไม่พบสัญญาณผิดปกติ</li>"
+  if(!aiRecommend.innerHTML)
+    aiRecommend.innerHTML="<li>ยังไม่พบสัญญาณผิดปกติ</li>"
 }
 
 /* ================= EXPORT ================= */
 function exportExcel(){
-  const ws=XLSX.utils.aoa_to_sheet([
-    ["รายได้รวม",kpiRevenue.textContent],
-    ["Forecast 7 วัน",kpiForecast.textContent]
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["รายได้รวม", kpiRevenue.textContent],
+    ["จำนวนบิล", kpiBills.textContent],
+    ["Forecast 7 วัน", kpiForecast.textContent]
   ])
-  const wb=XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb,ws,"Summary")
-  XLSX.writeFile(wb,"dashboard_pro_ultra.xlsx")
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, "Summary")
+  XLSX.writeFile(wb, "dashboard_pro_ultra_fixed.xlsx")
 }
 
-rangeSelect.onchange=()=>{ loadDashboard(); loadMoMAndAI() }
+rangeSelect.onchange = ()=>{
+  loadDashboard()
+  loadMoMAndAI()
+}
 
 ;(async()=>{
   await loadProducts()
