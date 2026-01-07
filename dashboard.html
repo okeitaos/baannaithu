@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>📊 Dashboard PRO (Owner Mode)</title>
+<title>📊 Dashboard PRO</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" href="data:,">
 
@@ -15,58 +15,46 @@
 
 <div class="max-w-7xl mx-auto space-y-4">
 
-  <h1 class="text-2xl font-bold">🌙 Owner Dashboard (16:00–22:00)</h1>
+  <h1 class="text-2xl font-bold">📊 Dashboard PRO (Owner)</h1>
 
   <!-- KPI -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
     <div class="bg-slate-800 p-4 rounded">
-      <div class="text-sm text-gray-400">รายได้เฉลี่ยต่อชั่วโมง</div>
-      <div id="avgPerHour" class="text-2xl font-bold">0 ฿</div>
-      <div class="text-xs text-gray-500">จากเวลาเปิดร้าน 6 ชั่วโมง</div>
+      <div class="text-sm text-gray-400">ยอดขายวันนี้</div>
+      <div id="todayTotal" class="text-2xl font-bold">0 ฿</div>
     </div>
     <div class="bg-slate-800 p-4 rounded">
-      <div class="text-sm text-gray-400">คาดการณ์รายได้ 7 วัน</div>
-      <div id="forecast7" class="text-2xl font-bold">0 ฿</div>
-      <div class="text-xs text-gray-500">จากค่าเฉลี่ยล่าสุด</div>
+      <div class="text-sm text-gray-400">ยอดขายเดือนนี้</div>
+      <div id="monthTotal" class="text-2xl font-bold">0 ฿</div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded">
+      <div class="text-sm text-gray-400">เฉลี่ยต่อออร์เดอร์</div>
+      <div id="avgBill" class="text-2xl font-bold">0 ฿</div>
     </div>
   </div>
 
-  <!-- INSIGHT BOX -->
+  <!-- Insight -->
   <div class="bg-slate-800 p-4 rounded border-l-4 border-yellow-400">
-    <h2 class="font-bold mb-2">🧠 Insight สำหรับเจ้าของร้าน</h2>
-    <div id="insightBox" class="space-y-1 text-sm"></div>
+    <h2 class="font-bold mb-2">🧠 Insight</h2>
+    <div id="insightBox" class="text-sm space-y-1"></div>
   </div>
 
-  <!-- HOURLY CHART -->
-  <div class="bg-slate-800 p-4 rounded">
-    <h2 class="font-bold mb-2">⏰ รายได้ต่อชั่วโมง</h2>
-    <canvas id="hourlyChart"></canvas>
-  </div>
-
-  <!-- FORECAST CHART -->
-  <div class="bg-slate-800 p-4 rounded">
-    <h2 class="font-bold mb-2">📈 Forecast รายได้ล่วงหน้า (7 วัน)</h2>
-    <canvas id="forecastChart"></canvas>
-  </div>
-
-  <!-- MENU BY TIME -->
-  <div class="bg-slate-800 p-4 rounded">
-    <h2 class="font-bold mb-2">🍜 เมนูขายดีตามช่วงเวลา</h2>
-
-    <div class="grid md:grid-cols-3 gap-3 text-sm">
-      <div>
-        <div class="font-bold mb-1">16:00–18:00</div>
-        <div id="menuEarly"></div>
-      </div>
-      <div>
-        <div class="font-bold mb-1">18:00–20:00</div>
-        <div id="menuPeak"></div>
-      </div>
-      <div>
-        <div class="font-bold mb-1">20:00–22:00</div>
-        <div id="menuLate"></div>
-      </div>
+  <!-- Charts -->
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="bg-slate-800 p-4 rounded">
+      <h2 class="font-bold mb-2">📈 ยอดขายรายวัน (7 วัน)</h2>
+      <canvas id="dailyChart"></canvas>
     </div>
+    <div class="bg-slate-800 p-4 rounded">
+      <h2 class="font-bold mb-2">🔥 สินค้าขายดี</h2>
+      <canvas id="topProductChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Forecast -->
+  <div class="bg-slate-800 p-4 rounded">
+    <h2 class="font-bold mb-2">🔮 Forecast 7 วัน</h2>
+    <canvas id="forecastChart"></canvas>
   </div>
 
 </div>
@@ -79,173 +67,156 @@ const sb = supabase.createClient(
 )
 
 /* ================= ELEMENT ================= */
-const avgPerHourEl = document.getElementById("avgPerHour")
-const forecast7El = document.getElementById("forecast7")
-const insightBoxEl = document.getElementById("insightBox")
+const todayTotalEl = document.getElementById("todayTotal")
+const monthTotalEl = document.getElementById("monthTotal")
+const avgBillEl = document.getElementById("avgBill")
+const insightBox = document.getElementById("insightBox")
 
-const hourlyCanvas = document.getElementById("hourlyChart")
-const forecastCanvas = document.getElementById("forecastChart")
-
-const menuEarlyEl = document.getElementById("menuEarly")
-const menuPeakEl = document.getElementById("menuPeak")
-const menuLateEl = document.getElementById("menuLate")
-
-let hourlyChart, forecastChart
+let dailyChart, topChart, forecastChart
 
 /* ================= UTILS ================= */
-function thaiTime(dateStr) {
-  const d = new Date(dateStr)
+function toTH(date) {
+  const d = new Date(date)
   d.setHours(d.getHours() + 7)
   return d
 }
-
-function slotByHour(h) {
-  if (h < 18) return "early"
-  if (h < 20) return "peak"
-  return "late"
+function dateKey(d) {
+  return d.toISOString().slice(0,10)
 }
 
 /* ================= LOAD ================= */
 async function loadDashboard() {
-  const { data } = await sb
+
+  // 1️⃣ โหลด orders ที่จ่ายเงินแล้ว
+  const { data: orders } = await sb
+    .from("orders")
+    .select("id, paid_at")
+    .eq("status", "paid")
+
+  if (!orders || orders.length === 0) return
+
+  const orderIds = orders.map(o => o.id)
+
+  // 2️⃣ โหลด order_items
+  const { data: items } = await sb
     .from("order_items")
-    .select(`
-      qty,
-      price,
-      product_id,
-      products(name),
-      orders!inner(paid_at)
-    `)
+    .select("order_id, product_id, qty, price")
+    .in("order_id", orderIds)
     .eq("status", "done")
 
-  const rows = data || []
+  // 3️⃣ โหลดสินค้า
+  const { data: products } = await sb
+    .from("products")
+    .select("id,name")
 
-  const hourlySum = {16:0,17:0,18:0,19:0,20:0,21:0}
-  const dailySum = {}
-  const menuGroup = { early:{}, peak:{}, late:{} }
+  const productMap = {}
+  products.forEach(p => productMap[p.id] = p.name)
 
-  let totalRevenue = 0
+  /* ================= CALC ================= */
+  const today = new Date()
+  const todayKey = dateKey(today)
+  const monthKey = todayKey.slice(0,7)
 
-  rows.forEach(r => {
-    const t = thaiTime(r.orders.paid_at)
-    const h = t.getHours()
-    if (h < 16 || h > 21) return
+  let todayTotal = 0
+  let monthTotal = 0
+  let billTotal = {}
+  let dailySum = {}
+  let productSum = {}
 
-    const total = r.qty * r.price
-    totalRevenue += total
-    hourlySum[h] += total
+  orders.forEach(o => {
+    const d = toTH(o.paid_at)
+    const dk = dateKey(d)
+    billTotal[o.id] = 0
 
-    const dateKey = t.toISOString().slice(0,10)
-    dailySum[dateKey] = (dailySum[dateKey] || 0) + total
+    items.filter(i => i.order_id === o.id).forEach(i => {
+      const total = i.qty * i.price
+      billTotal[o.id] += total
+      dailySum[dk] = (dailySum[dk] || 0) + total
+      productSum[i.product_id] =
+        (productSum[i.product_id] || 0) + i.qty
+    })
 
-    const slot = slotByHour(h)
-    menuGroup[slot][r.products.name] =
-      (menuGroup[slot][r.products.name] || 0) + r.qty
+    if (dk === todayKey) todayTotal += billTotal[o.id]
+    if (dk.startsWith(monthKey)) monthTotal += billTotal[o.id]
   })
 
-  const avgPerHour = totalRevenue / 6
-  avgPerHourEl.textContent =
-    Math.round(avgPerHour).toLocaleString() + " ฿"
+  const avgBill =
+    Object.values(billTotal).reduce((a,b)=>a+b,0) /
+    Object.keys(billTotal).length
 
-  // Forecast 7 days
-  const avgPerDay = Object.values(dailySum).reduce((a,b)=>a+b,0) /
-                    Math.max(Object.keys(dailySum).length,1)
-  const forecast7 = Math.round(avgPerDay * 7)
-  forecast7El.textContent = forecast7.toLocaleString() + " ฿"
+  todayTotalEl.textContent = todayTotal.toLocaleString() + " ฿"
+  monthTotalEl.textContent = monthTotal.toLocaleString() + " ฿"
+  avgBillEl.textContent = Math.round(avgBill).toLocaleString() + " ฿"
 
-  renderInsight(avgPerHour, hourlySum, menuGroup)
-  renderHourlyChart(hourlySum)
-  renderForecastChart(avgPerDay)
-  renderMenu(menuEarlyEl, menuGroup.early)
-  renderMenu(menuPeakEl, menuGroup.peak)
-  renderMenu(menuLateEl, menuGroup.late)
-}
-
-/* ================= INSIGHT ================= */
-function renderInsight(avgPerHour, hourlySum, menuGroup) {
-  insightBoxEl.innerHTML = ""
-
-  const peakHour = Object.entries(hourlySum)
+  /* ================= INSIGHT ================= */
+  const bestDay = Object.entries(dailySum)
     .sort((a,b)=>b[1]-a[1])[0]
 
-  insightBoxEl.innerHTML += `
-    <div>• ชั่วโมงทำเงินสูงสุด: <b>${peakHour[0]}:00</b></div>
+  insightBox.innerHTML = `
+    <div>• วันที่ขายดีที่สุด: <b>${bestDay?.[0]}</b></div>
+    <div>• ยอดเฉลี่ยต่อบิล: <b>${Math.round(avgBill)} บาท</b></div>
+    <div>• ถ้าเพิ่มยอดต่อบิล +10% → รายได้เพิ่มทันที</div>
   `
 
-  if (peakHour[1] > avgPerHour * 1.3) {
-    insightBoxEl.innerHTML += `
-      <div>• ช่วงพีคแรงมาก 👉 ควรเพิ่มกำลังครัวช่วงนี้</div>
-    `
-  }
-
-  if (hourlySum[21] < avgPerHour * 0.6) {
-    insightBoxEl.innerHTML += `
-      <div>• หลัง 21:00 รายได้ตก 👉 ดันเมนูเสริม / เครื่องดื่ม</div>
-    `
-  }
-
-  const topPeakMenu = Object.entries(menuGroup.peak)
-    .sort((a,b)=>b[1]-a[1])[0]
-
-  if (topPeakMenu) {
-    insightBoxEl.innerHTML += `
-      <div>• เมนูทำเงินช่วงพีค: <b>${topPeakMenu[0]}</b></div>
-    `
-  }
+  /* ================= CHARTS ================= */
+  renderDailyChart(dailySum)
+  renderTopProductChart(productSum, productMap)
+  renderForecastChart(dailySum)
 }
 
-/* ================= CHART ================= */
-function renderHourlyChart(map) {
-  if (hourlyChart) hourlyChart.destroy()
-  hourlyChart = new Chart(hourlyCanvas, {
-    type: "bar",
-    data: {
-      labels: ["16","17","18","19","20","21"],
-      datasets: [{
-        label: "รายได้ (บาท)",
-        data: Object.values(map),
-        backgroundColor: "#22c55e"
-      }]
-    }
-  })
-}
-
-function renderForecastChart(avgPerDay) {
-  if (forecastChart) forecastChart.destroy()
-
-  const labels = Array.from({length:7},(_,i)=>`Day ${i+1}`)
-  const data = labels.map(()=>Math.round(avgPerDay))
-
-  forecastChart = new Chart(forecastCanvas, {
+/* ================= CHART FUNC ================= */
+function renderDailyChart(map) {
+  if (dailyChart) dailyChart.destroy()
+  const labels = Object.keys(map).slice(-7)
+  dailyChart = new Chart(document.getElementById("dailyChart"), {
     type: "line",
     data: {
       labels,
       datasets: [{
-        label: "คาดการณ์รายได้",
-        data,
-        borderColor: "#facc15",
+        label: "ยอดขาย",
+        data: labels.map(l => map[l]),
+        borderColor: "#22c55e",
         tension: 0.3
       }]
     }
   })
 }
 
-/* ================= MENU ================= */
-function renderMenu(el, map) {
-  el.innerHTML = ""
-  const list = Object.entries(map)
+function renderTopProductChart(map, pmap) {
+  if (topChart) topChart.destroy()
+  const sorted = Object.entries(map)
     .sort((a,b)=>b[1]-a[1])
     .slice(0,5)
 
-  if (!list.length) {
-    el.innerHTML = `<div class="text-gray-400">ไม่มีข้อมูล</div>`
-    return
-  }
+  topChart = new Chart(document.getElementById("topProductChart"), {
+    type: "bar",
+    data: {
+      labels: sorted.map(i => pmap[i[0]]),
+      datasets: [{
+        data: sorted.map(i => i[1]),
+        backgroundColor: "#facc15"
+      }]
+    }
+  })
+}
 
-  list.forEach(([name,qty],i)=>{
-    const div = document.createElement("div")
-    div.textContent = `${i+1}. ${name} (${qty})`
-    el.appendChild(div)
+function renderForecastChart(map) {
+  if (forecastChart) forecastChart.destroy()
+  const values = Object.values(map)
+  const avg = values.reduce((a,b)=>a+b,0) / values.length
+  const data = Array.from({length:7},()=>Math.round(avg))
+
+  forecastChart = new Chart(document.getElementById("forecastChart"), {
+    type: "line",
+    data: {
+      labels: ["D+1","D+2","D+3","D+4","D+5","D+6","D+7"],
+      datasets: [{
+        label: "Forecast",
+        data,
+        borderColor: "#60a5fa",
+        tension: 0.3
+      }]
+    }
   })
 }
 
