@@ -7,7 +7,7 @@
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npmsweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <link rel="icon" href="data:,">
 </head>
@@ -18,7 +18,7 @@
 
   <!-- โต๊ะ -->
   <div class="col-span-3 bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">🪑 โต๊ะที่ยังไม่ปิดบิล</h2>
+    <h2 class="font-bold mb-3">🪑 โต๊ะที่พร้อมคิดเงิน</h2>
     <div id="tableList" class="space-y-2"></div>
   </div>
 
@@ -64,7 +64,6 @@ const PROMPTPAY_ID = "0936494961"
 
 /* ================= STATE ================= */
 let currentTableId = null
-let currentOrders = []
 let productMap = {}
 let tableMap = {}
 let paymentMethod = null
@@ -80,32 +79,52 @@ async function loadTables() {
   ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
 }
 
-/* ================= LOAD TABLES WITH OPEN ORDERS ================= */
+/* ================= LOAD TABLES (READY ONLY) ================= */
 async function loadOpenTables() {
-  const { data } = await sb
-    .from("orders")
-    .select("table_id")
-    .neq("status", "paid")
-
   tableList.innerHTML = ""
 
-  const uniqueTableIds = [...new Set((data || []).map(o => o.table_id))]
+  // 1) หา orders ที่ยังไม่ paid
+  const { data: orders } = await sb
+    .from("orders")
+    .select("id,table_id")
+    .neq("status", "paid")
 
-  uniqueTableIds.forEach(tableId => {
+  if (!orders) return
+
+  // group by table
+  const tableOrders = {}
+  orders.forEach(o => {
+    if (!tableOrders[o.table_id]) tableOrders[o.table_id] = []
+    tableOrders[o.table_id].push(o.id)
+  })
+
+  // 2) เช็กว่าโต๊ะนั้นไม่มี pending เหลือ
+  for (const [tableId, orderIds] of Object.entries(tableOrders)) {
+    const { data: pending } = await sb
+      .from("order_items")
+      .select("id")
+      .in("order_id", orderIds)
+      .eq("status", "pending")
+      .limit(1)
+
+    if (pending && pending.length > 0) continue // ยังไม่พร้อมคิดเงิน
+
     const btn = document.createElement("button")
     btn.className = "w-full bg-blue-600 py-2 rounded"
     btn.textContent = `โต๊ะ ${tableMap[tableId]}`
     btn.onclick = () => loadBillByTable(tableId)
     tableList.appendChild(btn)
-  })
+  }
 }
 
-/* ================= LOAD BILL BY TABLE ================= */
+/* ================= LOAD BILL ================= */
 async function loadBillByTable(tableId) {
   currentTableId = tableId
   paymentMethod = null
   payBtn.disabled = true
   qrBox.classList.add("hidden")
+  billItems.innerHTML = ""
+  let total = 0
 
   const { data: orders } = await sb
     .from("orders")
@@ -113,16 +132,12 @@ async function loadBillByTable(tableId) {
     .eq("table_id", tableId)
     .neq("status", "paid")
 
-  currentOrders = orders || []
-
-  billItems.innerHTML = ""
-  let total = 0
-
-  for (const order of currentOrders) {
+  for (const order of orders || []) {
     const { data: items } = await sb
       .from("order_items")
       .select("*")
       .eq("order_id", order.id)
+      .eq("status", "done")   // ⭐ สำคัญ
 
     ;(items || []).forEach(it => {
       const p = productMap[it.product_id]
@@ -171,7 +186,7 @@ payBtn.onclick = async () => {
 
   if (!confirm.isConfirmed) return
 
-  // 1) ปิด order ทั้งหมดของโต๊ะนี้
+  // 1) ปิด order
   await sb.from("orders")
     .update({
       status: "paid",
