@@ -38,7 +38,7 @@
       <div id="monthTotal" class="text-2xl font-bold">0 ฿</div>
     </div>
     <div class="bg-slate-800 p-4 rounded-xl">
-      <div class="text-sm text-gray-400">จำนวนบิล</div>
+      <div class="text-sm text-gray-400">จำนวนรายการขาย</div>
       <div id="orderCount" class="text-2xl font-bold">0</div>
     </div>
   </div>
@@ -79,7 +79,7 @@
 /* ================= CONFIG ================= */
 const sb = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+  "YOUR_ANON_KEY"
 )
 
 /* ================= STATE ================= */
@@ -92,12 +92,26 @@ async function loadProducts() {
   ;(data || []).forEach(p => productMap[p.id] = p.name)
 }
 
-/* ================= LOAD SALES ================= */
+/* ================= LOAD SALES (FIXED) ================= */
 async function loadSales() {
-  const { data } = await sb
+  const { data, error } = await sb
     .from("order_items")
-    .select("product_id,qty,price,orders(paid_at)")
+    .select(`
+      product_id,
+      qty,
+      price,
+      orders!inner(
+        paid_at,
+        status
+      )
+    `)
     .eq("status", "done")
+    .eq("orders.status", "paid")
+
+  if (error) {
+    console.error("loadSales error", error)
+    return
+  }
 
   saleRows = data || []
   renderDashboard()
@@ -112,27 +126,25 @@ function renderDashboard() {
   let monthTotal = 0
 
   const dailyMap = {}
-  const productMapSum = {}
+  const productSum = {}
 
   saleRows.forEach(r => {
-    const date = r.orders?.paid_at?.slice(0,10)
-    if (!date) return
-
+    const date = r.orders.paid_at.slice(0,10)
     const total = r.qty * r.price
 
     if (date === today) todayTotal += total
     if (date.startsWith(month)) monthTotal += total
 
     dailyMap[date] = (dailyMap[date] || 0) + total
-    productMapSum[r.product_id] = (productMapSum[r.product_id] || 0) + total
+    productSum[r.product_id] = (productSum[r.product_id] || 0) + total
   })
 
-  todayTotalEl.textContent = todayTotal.toLocaleString() + " ฿"
-  monthTotalEl.textContent = monthTotal.toLocaleString() + " ฿"
-  orderCount.textContent = Object.keys(dailyMap).length
+  todayTotal.textContent = todayTotal.toLocaleString() + " ฿"
+  monthTotal.textContent = monthTotal.toLocaleString() + " ฿"
+  orderCount.textContent = saleRows.length
 
   renderDailyChart(dailyMap)
-  renderProductChart(productMapSum)
+  renderProductChart(productSum)
   renderTable()
 }
 
@@ -143,7 +155,14 @@ function renderDailyChart(map) {
 
   new Chart(document.getElementById("dailyChart"), {
     type: "line",
-    data: { labels, datasets: [{ label: "ยอดขาย", data }] }
+    data: {
+      labels,
+      datasets: [{
+        label: "ยอดขาย",
+        data,
+        borderColor: "#22c55e"
+      }]
+    }
   })
 }
 
@@ -153,7 +172,14 @@ function renderProductChart(map) {
 
   new Chart(document.getElementById("productChart"), {
     type: "bar",
-    data: { labels, datasets: [{ label: "ยอดขาย", data }] }
+    data: {
+      labels,
+      datasets: [{
+        label: "ยอดขาย",
+        data,
+        backgroundColor: "#3b82f6"
+      }]
+    }
   })
 }
 
@@ -164,7 +190,7 @@ function renderTable() {
     const tr = document.createElement("tr")
     tr.className = "border-b border-slate-700"
     tr.innerHTML = `
-      <td class="py-1">${r.orders?.paid_at?.slice(0,10) || "-"}</td>
+      <td class="py-1">${r.orders.paid_at.slice(0,10)}</td>
       <td>${productMap[r.product_id]}</td>
       <td class="text-right">${r.qty}</td>
       <td class="text-right">${(r.qty*r.price).toLocaleString()}</td>
@@ -176,7 +202,7 @@ function renderTable() {
 /* ================= EXPORT ================= */
 function exportExcel() {
   const rows = saleRows.map(r => ({
-    date: r.orders?.paid_at,
+    date: r.orders.paid_at,
     product: productMap[r.product_id],
     qty: r.qty,
     total: r.qty * r.price
