@@ -2,62 +2,74 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>📊 Dashboard PRO</title>
+<title>📊 Dashboard PRO+</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="icon" href="data:,">
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<link rel="icon" href="data:,">
 </head>
 
-<body class="bg-slate-900 text-white min-h-screen p-3">
+<body class="bg-slate-900 text-white min-h-screen p-3 md:p-6">
 
-<div class="max-w-7xl mx-auto space-y-4">
+<div class="max-w-7xl mx-auto space-y-6">
 
-  <h1 class="text-2xl font-bold">📊 Dashboard PRO (Owner)</h1>
-
-  <!-- KPI -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-    <div class="bg-slate-800 p-4 rounded">
-      <div class="text-sm text-gray-400">ยอดขายวันนี้</div>
-      <div id="todayTotal" class="text-2xl font-bold">0 ฿</div>
-    </div>
-    <div class="bg-slate-800 p-4 rounded">
-      <div class="text-sm text-gray-400">ยอดขายเดือนนี้</div>
-      <div id="monthTotal" class="text-2xl font-bold">0 ฿</div>
-    </div>
-    <div class="bg-slate-800 p-4 rounded">
-      <div class="text-sm text-gray-400">เฉลี่ยต่อออร์เดอร์</div>
-      <div id="avgBill" class="text-2xl font-bold">0 ฿</div>
+  <!-- HEADER -->
+  <div class="flex flex-col md:flex-row md:justify-between gap-3">
+    <h1 class="text-2xl font-bold">📊 Dashboard PRO+</h1>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="setRange('today')" class="btn">วันนี้</button>
+      <button onclick="setRange('week')" class="btn">7 วัน</button>
+      <button onclick="setRange('month')" class="btn">เดือนนี้</button>
+      <button onclick="setRange('year')" class="btn">ปีนี้</button>
+      <button onclick="exportCSV()" class="btn bg-green-600">📊 Export Excel</button>
     </div>
   </div>
 
-  <!-- Insight -->
-  <div class="bg-slate-800 p-4 rounded border-l-4 border-yellow-400">
-    <h2 class="font-bold mb-2">🧠 Insight</h2>
-    <div id="insightBox" class="text-sm space-y-1"></div>
+  <!-- SUMMARY -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="card"><div class="label">รายได้รวม</div><div id="totalRevenue" class="value">0 ฿</div></div>
+    <div class="card"><div class="label">จำนวนรายการขาย</div><div id="billCount" class="value">0</div></div>
+    <div class="card"><div class="label">ขายเฉลี่ย / วัน</div><div id="avgPerDay" class="value">0 ฿</div></div>
+    <div class="card"><div class="label">ช่วงขายดีที่สุด</div><div id="bestHour" class="value">-</div></div>
   </div>
 
-  <!-- Charts -->
+  <!-- CHART -->
+  <div class="bg-slate-800 rounded-xl p-4">
+    <h2 class="font-bold mb-3">📈 รายได้ตามวัน</h2>
+    <canvas id="revenueChart" height="100"></canvas>
+  </div>
+
+  <!-- FORECAST -->
+  <div class="bg-indigo-700 rounded-xl p-4">
+    <h2 class="font-bold mb-2">🔮 Forecast อาทิตย์หน้า</h2>
+    <div id="forecastBox" class="text-xl font-bold">-</div>
+    <div class="text-sm opacity-80">* คำนวณจากค่าเฉลี่ย 7 วันล่าสุด</div>
+  </div>
+
+  <!-- MENU ANALYSIS -->
   <div class="grid md:grid-cols-2 gap-4">
-    <div class="bg-slate-800 p-4 rounded">
-      <h2 class="font-bold mb-2">📈 ยอดขายรายวัน (7 วัน)</h2>
-      <canvas id="dailyChart"></canvas>
+    <div class="bg-slate-800 rounded-xl p-4">
+      <h2 class="font-bold mb-2">🔥 เมนูควรดัน</h2>
+      <ul id="pushMenu" class="list-disc ml-5 text-sm space-y-1"></ul>
     </div>
-    <div class="bg-slate-800 p-4 rounded">
-      <h2 class="font-bold mb-2">🔥 สินค้าขายดี</h2>
-      <canvas id="topProductChart"></canvas>
+    <div class="bg-slate-800 rounded-xl p-4">
+      <h2 class="font-bold mb-2">🧊 เมนูควรพิจารณาปรับ / ตัด</h2>
+      <ul id="cutMenu" class="list-disc ml-5 text-sm space-y-1"></ul>
     </div>
-  </div>
-
-  <!-- Forecast -->
-  <div class="bg-slate-800 p-4 rounded">
-    <h2 class="font-bold mb-2">🔮 Forecast 7 วัน</h2>
-    <canvas id="forecastChart"></canvas>
   </div>
 
 </div>
+
+<style>
+.btn{background:#334155;padding:.5rem .75rem;border-radius:.5rem}
+.btn:hover{background:#475569}
+.card{background:#1e293b;border-radius:.75rem;padding:1rem}
+.label{font-size:.8rem;opacity:.7}
+.value{font-size:1.4rem;font-weight:bold}
+</style>
 
 <script>
 /* ================= CONFIG ================= */
@@ -66,161 +78,87 @@ const sb = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
 
-/* ================= ELEMENT ================= */
-const todayTotalEl = document.getElementById("todayTotal")
-const monthTotalEl = document.getElementById("monthTotal")
-const avgBillEl = document.getElementById("avgBill")
-const insightBox = document.getElementById("insightBox")
+let currentRange = "week"
+let chart
+let rawRows = []
 
-let dailyChart, topChart, forecastChart
-
-/* ================= UTILS ================= */
-function toTH(date) {
-  const d = new Date(date)
-  d.setHours(d.getHours() + 7)
-  return d
+/* ================= RANGE ================= */
+function getFromDate(r){
+  const d=new Date()
+  if(r==="today") d.setHours(0,0,0,0)
+  if(r==="week") d.setDate(d.getDate()-6)
+  if(r==="month") return new Date(d.getFullYear(),d.getMonth(),1).toISOString()
+  if(r==="year") return new Date(d.getFullYear(),0,1).toISOString()
+  return d.toISOString()
 }
-function dateKey(d) {
-  return d.toISOString().slice(0,10)
-}
+function setRange(r){currentRange=r;loadDashboard()}
 
 /* ================= LOAD ================= */
-async function loadDashboard() {
+async function loadDashboard(){
+  const from=getFromDate(currentRange)
 
-  // 1️⃣ โหลด orders ที่จ่ายเงินแล้ว
-  const { data: orders } = await sb
-    .from("orders")
-    .select("id, paid_at")
-    .eq("status", "paid")
+  const {data}=await sb.from("order_items")
+    .select("qty,price,created_at,product_id,orders!inner(status)")
+    .eq("orders.status","paid")
+    .gte("created_at",from)
 
-  if (!orders || orders.length === 0) return
+  rawRows=data||[]
 
-  const orderIds = orders.map(o => o.id)
-
-  // 2️⃣ โหลด order_items
-  const { data: items } = await sb
-    .from("order_items")
-    .select("order_id, product_id, qty, price")
-    .in("order_id", orderIds)
-    .eq("status", "done")
-
-  // 3️⃣ โหลดสินค้า
-  const { data: products } = await sb
-    .from("products")
-    .select("id,name")
-
-  const productMap = {}
-  products.forEach(p => productMap[p.id] = p.name)
-
-  /* ================= CALC ================= */
-  const today = new Date()
-  const todayKey = dateKey(today)
-  const monthKey = todayKey.slice(0,7)
-
-  let todayTotal = 0
-  let monthTotal = 0
-  let billTotal = {}
-  let dailySum = {}
-  let productSum = {}
-
-  orders.forEach(o => {
-    const d = toTH(o.paid_at)
-    const dk = dateKey(d)
-    billTotal[o.id] = 0
-
-    items.filter(i => i.order_id === o.id).forEach(i => {
-      const total = i.qty * i.price
-      billTotal[o.id] += total
-      dailySum[dk] = (dailySum[dk] || 0) + total
-      productSum[i.product_id] =
-        (productSum[i.product_id] || 0) + i.qty
-    })
-
-    if (dk === todayKey) todayTotal += billTotal[o.id]
-    if (dk.startsWith(monthKey)) monthTotal += billTotal[o.id]
+  let total=0,byDay={},byHour={},menu={}
+  rawRows.forEach(r=>{
+    const sum=r.price*r.qty
+    total+=sum
+    const day=r.created_at.slice(0,10)
+    byDay[day]=(byDay[day]||0)+sum
+    const h=new Date(r.created_at).getHours()
+    byHour[h]=(byHour[h]||0)+sum
+    menu[r.product_id]=(menu[r.product_id]||0)+r.qty
   })
 
-  const avgBill =
-    Object.values(billTotal).reduce((a,b)=>a+b,0) /
-    Object.keys(billTotal).length
+  document.getElementById("totalRevenue").textContent=total.toLocaleString()+" ฿"
+  document.getElementById("billCount").textContent=rawRows.length
+  document.getElementById("avgPerDay").textContent=
+    (total/Object.keys(byDay).length||0).toFixed(0)+" ฿"
 
-  todayTotalEl.textContent = todayTotal.toLocaleString() + " ฿"
-  monthTotalEl.textContent = monthTotal.toLocaleString() + " ฿"
-  avgBillEl.textContent = Math.round(avgBill).toLocaleString() + " ฿"
+  const best=Object.entries(byHour).sort((a,b)=>b[1]-a[1])[0]
+  document.getElementById("bestHour").textContent=best?`${best[0]}:00-${+best[0]+1}:00`:"-"
 
-  /* ================= INSIGHT ================= */
-  const bestDay = Object.entries(dailySum)
-    .sort((a,b)=>b[1]-a[1])[0]
-
-  insightBox.innerHTML = `
-    <div>• วันที่ขายดีที่สุด: <b>${bestDay?.[0]}</b></div>
-    <div>• ยอดเฉลี่ยต่อบิล: <b>${Math.round(avgBill)} บาท</b></div>
-    <div>• ถ้าเพิ่มยอดต่อบิล +10% → รายได้เพิ่มทันที</div>
-  `
-
-  /* ================= CHARTS ================= */
-  renderDailyChart(dailySum)
-  renderTopProductChart(productSum, productMap)
-  renderForecastChart(dailySum)
-}
-
-/* ================= CHART FUNC ================= */
-function renderDailyChart(map) {
-  if (dailyChart) dailyChart.destroy()
-  const labels = Object.keys(map).slice(-7)
-  dailyChart = new Chart(document.getElementById("dailyChart"), {
-    type: "line",
-    data: {
-      labels,
-      datasets: [{
-        label: "ยอดขาย",
-        data: labels.map(l => map[l]),
-        borderColor: "#22c55e",
-        tension: 0.3
-      }]
-    }
+  if(chart) chart.destroy()
+  chart=new Chart(revenueChart,{
+    type:"line",
+    data:{labels:Object.keys(byDay),datasets:[{data:Object.values(byDay),label:"รายได้",borderColor:"#22d3ee",fill:false}]}
   })
-}
 
-function renderTopProductChart(map, pmap) {
-  if (topChart) topChart.destroy()
-  const sorted = Object.entries(map)
-    .sort((a,b)=>b[1]-a[1])
-    .slice(0,5)
+  /* 🔮 Forecast */
+  const last7=Object.values(byDay).slice(-7)
+  const avg=last7.reduce((a,b)=>a+b,0)/7||0
+  document.getElementById("forecastBox").textContent=
+    "ประมาณ "+Math.round(avg*7).toLocaleString()+" ฿"
 
-  topChart = new Chart(document.getElementById("topProductChart"), {
-    type: "bar",
-    data: {
-      labels: sorted.map(i => pmap[i[0]]),
-      datasets: [{
-        data: sorted.map(i => i[1]),
-        backgroundColor: "#facc15"
-      }]
-    }
+  /* 📦 Menu analysis */
+  const push=[],cut=[]
+  Object.entries(menu).forEach(([id,qty])=>{
+    const ratio=qty/Object.values(menu).reduce((a,b)=>a+b,0)
+    if(ratio>0.2) push.push(`เมนู ${id} (${qty} ชาม)`)
+    if(ratio<0.05) cut.push(`เมนู ${id} (${qty} ชาม)`)
   })
+  pushMenu.innerHTML=push.map(i=>`<li>${i}</li>`).join("")||"<li>-</li>"
+  cutMenu.innerHTML=cut.map(i=>`<li>${i}</li>`).join("")||"<li>-</li>"
 }
 
-function renderForecastChart(map) {
-  if (forecastChart) forecastChart.destroy()
-  const values = Object.values(map)
-  const avg = values.reduce((a,b)=>a+b,0) / values.length
-  const data = Array.from({length:7},()=>Math.round(avg))
-
-  forecastChart = new Chart(document.getElementById("forecastChart"), {
-    type: "line",
-    data: {
-      labels: ["D+1","D+2","D+3","D+4","D+5","D+6","D+7"],
-      datasets: [{
-        label: "Forecast",
-        data,
-        borderColor: "#60a5fa",
-        tension: 0.3
-      }]
-    }
+/* ================= EXPORT ================= */
+function exportCSV(){
+  let csv="date,product_id,qty,price,total\n"
+  rawRows.forEach(r=>{
+    csv+=`${r.created_at.slice(0,10)},${r.product_id},${r.qty},${r.price},${r.qty*r.price}\n`
   })
+  const blob=new Blob([csv],{type:"text/csv"})
+  const a=document.createElement("a")
+  a.href=URL.createObjectURL(blob)
+  a.download="sales.csv"
+  a.click()
 }
 
-/* ================= INIT ================= */
 loadDashboard()
 </script>
 
