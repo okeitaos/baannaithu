@@ -14,37 +14,22 @@
 <body class="bg-slate-900 text-white min-h-screen p-2 md:p-4">
 
 <!-- 🔊 เสียงคิดเงิน -->
-<audio
-  id="paySound"
-  src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg">
-</audio>
+<audio id="paySound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 
-<div class="
-  max-w-6xl mx-auto
-  grid grid-cols-1 gap-3
-  md:grid-cols-12 md:gap-4
-">
+<div class="max-w-6xl mx-auto grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-4">
 
   <!-- โต๊ะ -->
   <div class="md:col-span-3 bg-slate-800 rounded-xl p-3">
     <h2 class="font-bold mb-3 text-lg">🪑 โต๊ะที่พร้อมคิดเงิน</h2>
-    <div
-      id="tableList"
-      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-1 gap-2">
-    </div>
+    <div id="tableList" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-1 gap-2"></div>
   </div>
 
   <!-- บิล -->
   <div class="md:col-span-9 bg-slate-800 rounded-xl p-3 flex flex-col">
     <h2 class="font-bold mb-3 text-lg">🧾 บิลรวมทั้งโต๊ะ</h2>
 
-    <!-- รายการบิล -->
-    <div
-      id="billItems"
-      class="space-y-2 mb-4 flex-1 overflow-y-auto max-h-[45vh] md:max-h-none">
-    </div>
+    <div id="billItems" class="space-y-2 mb-4 flex-1 overflow-y-auto max-h-[45vh] md:max-h-none"></div>
 
-    <!-- สรุป / ชำระเงิน -->
     <div class="border-t pt-4 space-y-4">
       <div class="text-xl font-bold flex justify-between">
         <span>รวมทั้งหมด</span>
@@ -52,28 +37,15 @@
       </div>
 
       <div class="flex gap-3">
-        <button
-          id="cashBtn"
-          class="flex-1 bg-green-600 px-4 py-3 rounded text-lg">
-          💵 เงินสด
-        </button>
-        <button
-          id="qrBtn"
-          class="flex-1 bg-blue-600 px-4 py-3 rounded text-lg">
-          📱 PromptPay
-        </button>
+        <button id="cashBtn" class="flex-1 bg-green-600 px-4 py-3 rounded text-lg">💵 เงินสด</button>
+        <button id="qrBtn" class="flex-1 bg-blue-600 px-4 py-3 rounded text-lg">📱 PromptPay</button>
       </div>
 
       <div id="qrBox" class="hidden text-center">
-        <img
-          id="qrImg"
-          class="mx-auto w-48 bg-white p-2 rounded" />
+        <img id="qrImg" class="mx-auto w-48 bg-white p-2 rounded" />
       </div>
 
-      <button
-        id="payBtn"
-        class="w-full bg-yellow-500 py-3 rounded text-lg disabled:opacity-40"
-        disabled>
+      <button id="payBtn" class="w-full bg-yellow-500 py-3 rounded text-lg disabled:opacity-40" disabled>
         ✅ ยืนยันชำระเงิน
       </button>
     </div>
@@ -90,23 +62,11 @@ const sb = supabase.createClient(
 
 const PROMPTPAY_ID = "0936494961"
 
-/* ================= SOUND AUTO UNLOCK ================= */
+/* ================= SOUND ================= */
 const paySound = document.getElementById("paySound")
-let soundUnlocked = false
-
-function unlockSoundOnce() {
-  if (soundUnlocked) return
-  paySound.play()
-    .then(() => {
-      paySound.pause()
-      paySound.currentTime = 0
-      soundUnlocked = true
-    })
-    .catch(() => {})
-}
-
-document.addEventListener("click", unlockSoundOnce, { once: true })
-document.addEventListener("touchstart", unlockSoundOnce, { once: true })
+document.addEventListener("click", () => {
+  paySound.play().then(()=>{ paySound.pause(); paySound.currentTime = 0 })
+},{ once:true })
 
 /* ================= STATE ================= */
 let currentTableId = null
@@ -117,7 +77,8 @@ let tableMap = {}
 /* ================= MASTER ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
-  ;(data || []).forEach(p => productMap[p.id] = p)
+  productMap = {}
+  ;(data || []).forEach(p => productMap[p.id] = p.name)
 }
 
 async function loadTables() {
@@ -136,11 +97,11 @@ async function loadOpenTables() {
 
   const tableIds = [...new Set((orders || []).map(o => o.table_id))]
 
-  tableIds.forEach(tableId => {
+  tableIds.forEach(id => {
     const btn = document.createElement("button")
     btn.className = "w-full bg-blue-600 py-3 rounded font-bold"
-    btn.textContent = `โต๊ะ ${tableMap[tableId]}`
-    btn.onclick = () => loadBillByTable(tableId)
+    btn.textContent = `โต๊ะ ${tableMap[id]}`
+    btn.onclick = () => loadBillByTable(id)
     tableList.appendChild(btn)
   })
 }
@@ -164,23 +125,14 @@ async function loadBillByTable(tableId) {
   for (const o of orders || []) {
     const { data: items } = await sb
       .from("order_items")
-      .select(`
-        product_id,
-        qty,
-        price,
-        option_special,
-        option_mix,
-        mix_sauce_id
-      `)
+      .select("product_id,qty,price,option_special,option_mix,mix_sauce_id")
       .eq("order_id", o.id)
       .eq("status", "done")
 
     ;(items || []).forEach(it => {
-      const p = productMap[it.product_id]
-      if (!p) return
+      const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
 
-      // 🔎 สร้างข้อความ option
-      let optionText = []
+      const optionText = []
       if (it.option_special) optionText.push("พิเศษ")
       if (it.option_mix && it.mix_sauce_id) {
         const mixName = productMap[it.mix_sauce_id] || "ไม่ทราบน้ำ"
@@ -188,26 +140,23 @@ async function loadBillByTable(tableId) {
       }
 
       const optionLabel = optionText.length
-        ? ` <span class="text-sm text-yellow-400">(${optionText.join(" / ")})</span>`
+        ? `<span class="text-yellow-400 text-sm">(${optionText.join(" + ")})</span>`
         : ""
 
-      const rowTotal = it.price * it.qty
-      total += rowTotal
+      const lineTotal = it.price * it.qty
+      total += lineTotal
 
       const div = document.createElement("div")
-      div.className = "flex justify-between border-b border-slate-700 py-1"
-
+      div.className = "border-b border-slate-700 pb-2"
       div.innerHTML = `
-        <div>
-          ${p} x ${it.qty}
-          ${optionLabel}
-          <div class="text-xs text-gray-400">
-            ${it.price} บาท / ชาม
+        <div class="flex justify-between">
+          <div>
+            <div class="font-bold">${name} x ${it.qty} ${optionLabel}</div>
+            <div class="text-xs text-gray-400">${it.price} บาท / ชาม</div>
           </div>
+          <div class="font-bold">${lineTotal} บาท</div>
         </div>
-        <div class="font-bold">${rowTotal} บาท</div>
       `
-
       billItems.appendChild(div)
     })
   }
@@ -215,7 +164,7 @@ async function loadBillByTable(tableId) {
   totalPrice.textContent = total
 }
 
-/* ================= PAYMENT METHOD ================= */
+/* ================= PAYMENT ================= */
 cashBtn.onclick = () => {
   paymentMethod = "cash"
   qrBox.classList.add("hidden")
@@ -229,7 +178,6 @@ qrBtn.onclick = () => {
   payBtn.disabled = false
 }
 
-/* ================= PAY ================= */
 payBtn.onclick = async () => {
   if (!currentTableId || !paymentMethod) return
 
@@ -242,24 +190,15 @@ payBtn.onclick = async () => {
   })
   if (!confirm.isConfirmed) return
 
-  const { error } = await sb.rpc("close_orders_by_table", {
+  await sb.rpc("close_orders_by_table", {
     p_table_id: currentTableId,
     p_method: paymentMethod
   })
 
-  if (error) {
-    Swal.fire("ผิดพลาด", error.message, "error")
-    return
-  }
+  await sb.from("tables").update({ status: "available" }).eq("id", currentTableId)
 
-  await sb.from("tables")
-    .update({ status: "available" })
-    .eq("id", currentTableId)
-
-  if (soundUnlocked) {
-    paySound.currentTime = 0
-    paySound.play().catch(()=>{})
-  }
+  paySound.currentTime = 0
+  paySound.play().catch(()=>{})
 
   Swal.fire("สำเร็จ", "ปิดบิลเรียบร้อย", "success")
 
