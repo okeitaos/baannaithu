@@ -17,7 +17,6 @@
 
 <div class="max-w-7xl mx-auto space-y-4">
 
-  <!-- Header -->
   <div class="flex justify-between items-center">
     <h1 class="text-2xl font-bold">📊 Dashboard ยอดขาย</h1>
     <button onclick="exportExcel()"
@@ -26,7 +25,7 @@
     </button>
   </div>
 
-  <!-- Summary -->
+  <!-- SUMMARY -->
   <div class="grid md:grid-cols-3 gap-4">
     <div class="bg-slate-800 p-4 rounded">
       <div class="text-sm text-gray-400">ยอดขายวันนี้</div>
@@ -42,7 +41,7 @@
     </div>
   </div>
 
-  <!-- Charts -->
+  <!-- CHART -->
   <div class="grid md:grid-cols-2 gap-4">
     <div class="bg-slate-800 p-4 rounded">
       <h2 class="font-bold mb-2">📈 ยอดขายรายวัน</h2>
@@ -54,7 +53,7 @@
     </div>
   </div>
 
-  <!-- Table -->
+  <!-- TABLE -->
   <div class="bg-slate-800 p-4 rounded">
     <h2 class="font-bold mb-3">📄 รายการขายทั้งหมด</h2>
     <div class="overflow-auto">
@@ -84,24 +83,27 @@ const sb = supabase.createClient(
 /* ================= STATE ================= */
 let saleRows = []
 let productMap = {}
-
 let dailyChart, productChart
 
+const todayTotalEl = document.getElementById("todayTotal")
+const monthTotalEl = document.getElementById("monthTotal")
+const orderCountEl = document.getElementById("orderCount")
+
 /* ================= UTILS ================= */
-function toThaiDate(iso) {
+function thaiDate(iso) {
   const d = new Date(iso)
   d.setHours(d.getHours() + 7)
   return d.toISOString().slice(0, 10)
 }
 
-/* ================= LOAD DATA ================= */
+/* ================= LOAD ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
   ;(data || []).forEach(p => productMap[p.id] = p.name)
 }
 
 async function loadSales() {
-  const { data, error } = await sb
+  const { data } = await sb
     .from("order_items")
     .select(`
       product_id,
@@ -111,105 +113,83 @@ async function loadSales() {
     `)
     .eq("status", "done")
 
-  if (error) {
-    console.error(error)
-    return
-  }
-
   saleRows = data || []
   renderDashboard()
 }
 
 /* ================= RENDER ================= */
 function renderDashboard() {
-  const today = toThaiDate(new Date().toISOString())
-  const month = today.slice(0,7)
+  const today = thaiDate(new Date().toISOString())
+  const month = today.slice(0, 7)
 
-  let todayTotal = 0
-  let monthTotal = 0
+  let todaySum = 0
+  let monthSum = 0
 
   const dailyMap = {}
-  const productSum = {}
+  const productMapSum = {}
 
   saleRows.forEach(r => {
-    const date = toThaiDate(r.orders.paid_at)
+    const d = thaiDate(r.orders.paid_at)
     const total = r.qty * r.price
 
-    if (date === today) todayTotal += total
-    if (date.startsWith(month)) monthTotal += total
+    if (d === today) todaySum += total
+    if (d.startsWith(month)) monthSum += total
 
-    dailyMap[date] = (dailyMap[date] || 0) + total
-    productSum[r.product_id] =
-      (productSum[r.product_id] || 0) + total
+    dailyMap[d] = (dailyMap[d] || 0) + total
+    productMapSum[r.product_id] =
+      (productMapSum[r.product_id] || 0) + total
   })
 
-  todayTotal.textContent = todayTotal.toLocaleString() + " ฿"
-  monthTotal.textContent = monthTotal.toLocaleString() + " ฿"
-  orderCount.textContent = saleRows.length
+  todayTotalEl.textContent = todaySum.toLocaleString() + " ฿"
+  monthTotalEl.textContent = monthSum.toLocaleString() + " ฿"
+  orderCountEl.textContent = saleRows.length
 
   renderDailyChart(dailyMap)
-  renderProductChart(productSum)
+  renderProductChart(productMapSum)
   renderTable()
 }
 
-/* ================= CHARTS ================= */
+/* ================= CHART ================= */
 function renderDailyChart(map) {
-  const labels = Object.keys(map).sort()
-  const data = labels.map(d => map[d])
-
   if (dailyChart) dailyChart.destroy()
-  dailyChart = new Chart(
-    document.getElementById("dailyChart"),
-    {
-      type: "line",
-      data: {
-        labels,
-        datasets: [{
-          label: "ยอดขาย",
-          data,
-          borderColor: "#22c55e",
-          tension: 0.3
-        }]
-      }
+  dailyChart = new Chart(dailyChartEl, {
+    type: "line",
+    data: {
+      labels: Object.keys(map),
+      datasets: [{
+        label: "ยอดขาย",
+        data: Object.values(map),
+        borderColor: "#22c55e"
+      }]
     }
-  )
+  })
 }
 
 function renderProductChart(map) {
-  const labels = Object.keys(map).map(id => productMap[id] || "-")
-  const data = Object.values(map)
-
   if (productChart) productChart.destroy()
-  productChart = new Chart(
-    document.getElementById("productChart"),
-    {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [{
-          label: "ยอดขาย",
-          data,
-          backgroundColor: "#3b82f6"
-        }]
-      }
+  productChart = new Chart(productChartEl, {
+    type: "bar",
+    data: {
+      labels: Object.keys(map).map(id => productMap[id]),
+      datasets: [{
+        label: "ยอดขาย",
+        data: Object.values(map),
+        backgroundColor: "#3b82f6"
+      }]
     }
-  )
+  })
 }
 
 /* ================= TABLE ================= */
 function renderTable() {
   saleTable.innerHTML = ""
-
   saleRows.forEach(r => {
     const tr = document.createElement("tr")
-    const date = toThaiDate(r.orders.paid_at)
-    const total = r.qty * r.price
-
     tr.innerHTML = `
-      <td class="p-2">${date}</td>
+      <td class="p-2">${thaiDate(r.orders.paid_at)}</td>
       <td class="p-2">${productMap[r.product_id]}</td>
       <td class="p-2 text-right">${r.qty}</td>
-      <td class="p-2 text-right">${total}</td>
+      <td class="p-2 text-right">${r.qty * r.price}</td>
     `
     saleTable.appendChild(tr)
   })
@@ -218,17 +198,15 @@ function renderTable() {
 /* ================= EXPORT ================= */
 function exportExcel() {
   const rows = saleRows.map(r => ({
-    วันที่: toThaiDate(r.orders.paid_at),
+    วันที่: thaiDate(r.orders.paid_at),
     เมนู: productMap[r.product_id],
     จำนวน: r.qty,
     ยอด: r.qty * r.price
   }))
-
   const ws = XLSX.utils.json_to_sheet(rows)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, "Sales")
-
-  XLSX.writeFile(wb, "sales_report.xlsx")
+  XLSX.writeFile(wb, "sales.xlsx")
 }
 
 /* ================= INIT ================= */
