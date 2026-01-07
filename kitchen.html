@@ -73,19 +73,23 @@ async function cancelItem(item) {
 }
 
 async function reduceItem(item) {
+  // ถ้าเหลือ 1 → ยกเลิกทั้งรายการ
   if (item.qty <= 1) {
     return cancelItem(item)
   }
 
+  // 1) ลด qty ตัวเดิมลง 1
   await sb.from("order_items")
     .update({ qty: item.qty - 1 })
     .eq("id", item.id)
 
+  // 2) สร้าง cancelled item (copy field สำคัญให้ครบ)
   await sb.from("order_items").insert({
     order_id: item.order_id,
     product_id: item.product_id,
     mix_sauce_id: item.mix_sauce_id,
     qty: 1,
+    price: item.price,              // ⭐ สำคัญ แก้ 400 error
     option_special: item.option_special,
     option_mix: item.option_mix,
     status: "cancelled"
