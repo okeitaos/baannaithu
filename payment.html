@@ -13,6 +13,18 @@
 
 <body class="bg-slate-900 text-white min-h-screen p-4">
 
+<!-- 🔊 เปิดเสียง -->
+<button
+  id="enableSoundBtn"
+  class="mb-4 bg-yellow-500 text-black px-4 py-2 rounded font-bold">
+  🔊 เปิดเสียงแจ้งเตือน
+</button>
+
+<audio
+  id="paySound"
+  src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg">
+</audio>
+
 <div class="max-w-6xl mx-auto grid grid-cols-12 gap-4">
 
   <!-- โต๊ะ -->
@@ -61,6 +73,22 @@ const sb = supabase.createClient(
 
 const PROMPTPAY_ID = "0936494961"
 
+/* ================= SOUND ================= */
+const paySound = document.getElementById("paySound")
+let soundEnabled = false
+
+document.getElementById("enableSoundBtn").onclick = async () => {
+  try {
+    await paySound.play()
+    paySound.pause()
+    paySound.currentTime = 0
+    soundEnabled = true
+    document.getElementById("enableSoundBtn").remove()
+  } catch (e) {
+    console.warn("Sound not enabled yet")
+  }
+}
+
 /* ================= STATE ================= */
 let currentTableId = null
 let paymentMethod = null
@@ -108,14 +136,12 @@ async function loadBillByTable(tableId) {
 
   let total = 0
 
-  // 1️⃣ หา orders ที่ยังเปิดของโต๊ะนี้
   const { data: orders } = await sb
     .from("orders")
     .select("id")
     .eq("table_id", tableId)
     .eq("status", "open")
 
-  // 2️⃣ รวม order_items ที่ DONE
   for (const o of orders || []) {
     const { data: items } = await sb
       .from("order_items")
@@ -170,7 +196,6 @@ payBtn.onclick = async () => {
   })
   if (!confirm.isConfirmed) return
 
-  // 3️⃣ ปิดทุก order ของโต๊ะนี้
   const { error } = await sb.rpc("close_orders_by_table", {
     p_table_id: currentTableId,
     p_method: paymentMethod
@@ -181,10 +206,15 @@ payBtn.onclick = async () => {
     return
   }
 
-  // 4️⃣ คืนโต๊ะ
   await sb.from("tables")
     .update({ status: "available" })
     .eq("id", currentTableId)
+
+  // 🔔 เล่นเสียงเมื่อจ่ายเงินสำเร็จ
+  if (soundEnabled) {
+    paySound.currentTime = 0
+    paySound.play().catch(()=>{})
+  }
 
   Swal.fire("สำเร็จ", "ปิดบิลเรียบร้อย", "success")
 
