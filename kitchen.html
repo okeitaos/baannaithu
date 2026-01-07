@@ -8,7 +8,6 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <link rel="icon" href="data:,">
 </head>
 
@@ -30,6 +29,7 @@ let productMap = {}
 let tableMap = {}
 let orderTableMap = {}
 
+/* ===== master ===== */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
   data.forEach(p => productMap[p.id] = p.name)
@@ -41,11 +41,16 @@ async function loadTables() {
 }
 
 async function loadOrdersMap() {
-  const { data } = await sb.from("orders").select("id,table_id").eq("status","open")
+  const { data } = await sb
+    .from("orders")
+    .select("id,table_id")
+    .eq("status","open")
+
   orderTableMap = {}
   data.forEach(o => orderTableMap[o.id] = tableMap[o.table_id])
 }
 
+/* ===== load bills ===== */
 async function loadBills() {
   billList.innerHTML = ""
 
@@ -63,19 +68,28 @@ async function loadBills() {
 
   Object.entries(grouped).forEach(([orderId, items]) => {
     const card = document.createElement("div")
-    card.className = "bg-slate-800 p-4 rounded-xl"
+    card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
 
     card.innerHTML = `
-      <div class="font-bold mb-2">🍽️ โต๊ะ ${orderTableMap[orderId] || "-"}</div>
+      <div class="flex justify-between items-center mb-2">
+        <div class="font-bold text-lg">
+          🍽️ โต๊ะ ${orderTableMap[orderId] || "-"}
+        </div>
+        <button
+          data-confirm-order="${orderId}"
+          class="bg-green-600 px-3 py-1 rounded font-bold">
+          ✅ ยืนยันออร์เดอร์
+        </button>
+      </div>
+
       ${items.map(it => `
         <div class="flex justify-between items-center border-b py-1">
-          <div>${productMap[it.product_id]}</div>
-          <div class="flex gap-2">
-            <button data-dec="${it.id}" class="bg-slate-600 px-2 rounded">−</button>
-            <span>${it.qty}</span>
-            <button data-inc="${it.id}" class="bg-slate-600 px-2 rounded">+</button>
-            <button data-cancel="${it.id}" class="bg-red-600 px-2 rounded">✕</button>
-          </div>
+          <div>${productMap[it.product_id]} x ${it.qty}</div>
+          <button
+            data-cancel-item="${it.id}"
+            class="bg-red-600 px-2 rounded text-white">
+            ✕
+          </button>
         </div>
       `).join("")}
     `
@@ -83,13 +97,35 @@ async function loadBills() {
   })
 }
 
-/* ===== ACTION HANDLER ===== */
+/* ===== actions ===== */
 document.addEventListener("click", async e => {
-  const cancel = e.target.dataset.cancel
-  const dec = e.target.dataset.dec
-  const inc = e.target.dataset.inc
 
-  if (cancel) {
+  /* ยืนยันออร์เดอร์ทั้งบิล */
+  const confirmOrderId = e.target.dataset.confirmOrder
+  if (confirmOrderId) {
+    const res = await Swal.fire({
+      title: "ยืนยันออร์เดอร์ทั้งบิล?",
+      text: "รายการทั้งหมดจะถูกส่งไปคิดเงิน",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "ยืนยัน",
+      cancelButtonText: "ยกเลิก",
+      confirmButtonColor: "#16a34a",
+      cancelButtonColor: "#64748b"
+    })
+    if (!res.isConfirmed) return
+
+    await sb.from("order_items")
+      .update({ status: "done" })
+      .eq("order_id", confirmOrderId)
+      .eq("status", "pending")
+
+    loadBills()
+  }
+
+  /* ยกเลิกรายการเดียว */
+  const cancelItemId = e.target.dataset.cancelItem
+  if (cancelItemId) {
     const res = await Swal.fire({
       title: "ยกเลิกรายการนี้?",
       icon: "warning",
@@ -102,26 +138,14 @@ document.addEventListener("click", async e => {
     if (!res.isConfirmed) return
 
     await sb.from("order_items")
-      .update({ status:"cancelled" })
-      .eq("id", cancel)
+      .update({ status: "cancelled" })
+      .eq("id", cancelItemId)
 
-    loadBills()
-  }
-
-  if (dec || inc) {
-    const id = dec || inc
-    const { data:[item] } = await sb.from("order_items").select("*").eq("id",id)
-    const newQty = dec ? item.qty - 1 : item.qty + 1
-
-    if (newQty <= 0) {
-      await sb.from("order_items").update({status:"cancelled"}).eq("id",id)
-    } else {
-      await sb.from("order_items").update({qty:newQty}).eq("id",id)
-    }
     loadBills()
   }
 })
 
+/* ===== init ===== */
 ;(async()=>{
   await loadProducts()
   await loadTables()
