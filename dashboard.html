@@ -2,74 +2,80 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>📊 Dashboard PRO+</title>
+<title>📊 Dashboard PRO</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <link rel="icon" href="data:,">
 </head>
 
-<body class="bg-slate-900 text-white min-h-screen p-3 md:p-6">
+<body class="bg-slate-900 text-white min-h-screen p-3">
 
-<div class="max-w-7xl mx-auto space-y-6">
+<div class="max-w-7xl mx-auto space-y-4">
 
   <!-- HEADER -->
-  <div class="flex flex-col md:flex-row md:justify-between gap-3">
-    <h1 class="text-2xl font-bold">📊 Dashboard PRO+</h1>
-    <div class="flex gap-2 flex-wrap">
-      <button onclick="setRange('today')" class="btn">วันนี้</button>
-      <button onclick="setRange('week')" class="btn">7 วัน</button>
-      <button onclick="setRange('month')" class="btn">เดือนนี้</button>
-      <button onclick="setRange('year')" class="btn">ปีนี้</button>
-      <button onclick="exportCSV()" class="btn bg-green-600">📊 Export Excel</button>
-    </div>
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <h1 class="text-2xl font-bold">📊 Dashboard PRO</h1>
+
+    <select
+      id="rangeSelect"
+      class="bg-slate-800 px-3 py-2 rounded">
+      <option value="today">วันนี้</option>
+      <option value="week">สัปดาห์นี้</option>
+      <option value="month" selected>เดือนนี้</option>
+      <option value="year">ปีนี้</option>
+    </select>
   </div>
 
-  <!-- SUMMARY -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-    <div class="card"><div class="label">รายได้รวม</div><div id="totalRevenue" class="value">0 ฿</div></div>
-    <div class="card"><div class="label">จำนวนรายการขาย</div><div id="billCount" class="value">0</div></div>
-    <div class="card"><div class="label">ขายเฉลี่ย / วัน</div><div id="avgPerDay" class="value">0 ฿</div></div>
-    <div class="card"><div class="label">ช่วงขายดีที่สุด</div><div id="bestHour" class="value">-</div></div>
+  <!-- INSIGHT BOX -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <div class="bg-slate-800 p-4 rounded">
+      <div class="text-sm text-gray-400">ยอดขายรวม</div>
+      <div id="totalSales" class="text-2xl font-bold">0</div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded">
+      <div class="text-sm text-gray-400">จำนวนบิล</div>
+      <div id="totalBills" class="text-2xl font-bold">0</div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded">
+      <div class="text-sm text-gray-400">ขายเฉลี่ย / บิล</div>
+      <div id="avgBill" class="text-2xl font-bold">0</div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded">
+      <div class="text-sm text-gray-400">🔮 Forecast อาทิตย์หน้า</div>
+      <div id="forecast" class="text-2xl font-bold">0</div>
+    </div>
   </div>
 
   <!-- CHART -->
-  <div class="bg-slate-800 rounded-xl p-4">
-    <h2 class="font-bold mb-3">📈 รายได้ตามวัน</h2>
-    <canvas id="revenueChart" height="100"></canvas>
-  </div>
-
-  <!-- FORECAST -->
-  <div class="bg-indigo-700 rounded-xl p-4">
-    <h2 class="font-bold mb-2">🔮 Forecast อาทิตย์หน้า</h2>
-    <div id="forecastBox" class="text-xl font-bold">-</div>
-    <div class="text-sm opacity-80">* คำนวณจากค่าเฉลี่ย 7 วันล่าสุด</div>
+  <div class="bg-slate-800 p-4 rounded">
+    <canvas id="salesChart"></canvas>
   </div>
 
   <!-- MENU ANALYSIS -->
-  <div class="grid md:grid-cols-2 gap-4">
-    <div class="bg-slate-800 rounded-xl p-4">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div class="bg-slate-800 p-4 rounded">
       <h2 class="font-bold mb-2">🔥 เมนูควรดัน</h2>
-      <ul id="pushMenu" class="list-disc ml-5 text-sm space-y-1"></ul>
+      <ul id="pushMenu" class="list-disc pl-5 space-y-1"></ul>
     </div>
-    <div class="bg-slate-800 rounded-xl p-4">
+    <div class="bg-slate-800 p-4 rounded">
       <h2 class="font-bold mb-2">🧊 เมนูควรพิจารณาปรับ / ตัด</h2>
-      <ul id="cutMenu" class="list-disc ml-5 text-sm space-y-1"></ul>
+      <ul id="cutMenu" class="list-disc pl-5 space-y-1"></ul>
     </div>
   </div>
 
-</div>
+  <!-- EXPORT -->
+  <button
+    onclick="exportExcel()"
+    class="bg-green-600 px-4 py-2 rounded font-bold">
+    📥 Export Excel
+  </button>
 
-<style>
-.btn{background:#334155;padding:.5rem .75rem;border-radius:.5rem}
-.btn:hover{background:#475569}
-.card{background:#1e293b;border-radius:.75rem;padding:1rem}
-.label{font-size:.8rem;opacity:.7}
-.value{font-size:1.4rem;font-weight:bold}
-</style>
+</div>
 
 <script>
 /* ================= CONFIG ================= */
@@ -78,88 +84,128 @@ const sb = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
 
-let currentRange = "week"
+/* ================= STATE ================= */
+let productNameMap = {}
 let chart
-let rawRows = []
 
-/* ================= RANGE ================= */
-function getFromDate(r){
-  const d=new Date()
-  if(r==="today") d.setHours(0,0,0,0)
-  if(r==="week") d.setDate(d.getDate()-6)
-  if(r==="month") return new Date(d.getFullYear(),d.getMonth(),1).toISOString()
-  if(r==="year") return new Date(d.getFullYear(),0,1).toISOString()
-  return d.toISOString()
+/* ================= LOAD PRODUCTS ================= */
+async function loadProductNames() {
+  const { data } = await sb.from("products").select("id,name")
+  productNameMap = {}
+  ;(data || []).forEach(p => productNameMap[p.id] = p.name)
 }
-function setRange(r){currentRange=r;loadDashboard()}
 
-/* ================= LOAD ================= */
-async function loadDashboard(){
-  const from=getFromDate(currentRange)
+/* ================= DATE RANGE ================= */
+function getDateRange(type) {
+  const now = new Date()
+  let start = new Date()
 
-  const {data}=await sb.from("order_items")
-    .select("qty,price,created_at,product_id,orders!inner(status)")
-    .eq("orders.status","paid")
-    .gte("created_at",from)
+  if (type === "today") {
+    start.setHours(0,0,0,0)
+  }
+  if (type === "week") {
+    start.setDate(now.getDate() - now.getDay())
+  }
+  if (type === "month") {
+    start = new Date(now.getFullYear(), now.getMonth(), 1)
+  }
+  if (type === "year") {
+    start = new Date(now.getFullYear(), 0, 1)
+  }
 
-  rawRows=data||[]
+  return start.toISOString()
+}
 
-  let total=0,byDay={},byHour={},menu={}
-  rawRows.forEach(r=>{
-    const sum=r.price*r.qty
-    total+=sum
-    const day=r.created_at.slice(0,10)
-    byDay[day]=(byDay[day]||0)+sum
-    const h=new Date(r.created_at).getHours()
-    byHour[h]=(byHour[h]||0)+sum
-    menu[r.product_id]=(menu[r.product_id]||0)+r.qty
+/* ================= DASHBOARD ================= */
+async function loadDashboard() {
+  const range = rangeSelect.value
+  const startDate = getDateRange(range)
+
+  const { data: items } = await sb
+    .from("order_items")
+    .select("product_id,qty,price,created_at")
+    .eq("status", "done")
+    .gte("created_at", startDate)
+
+  const rows = items || []
+
+  // Summary
+  let total = 0
+  let menu = {}
+  let daily = {}
+
+  rows.forEach(r => {
+    total += r.price * r.qty
+    menu[r.product_id] = (menu[r.product_id] || 0) + r.qty
+
+    const d = r.created_at.slice(0,10)
+    daily[d] = (daily[d] || 0) + r.price * r.qty
   })
 
-  document.getElementById("totalRevenue").textContent=total.toLocaleString()+" ฿"
-  document.getElementById("billCount").textContent=rawRows.length
-  document.getElementById("avgPerDay").textContent=
-    (total/Object.keys(byDay).length||0).toFixed(0)+" ฿"
+  totalSales.textContent = total.toLocaleString()
+  totalBills.textContent = new Set(rows.map(r => r.created_at.slice(0,10))).size
+  avgBill.textContent =
+    totalBills.textContent > 0
+      ? Math.round(total / totalBills.textContent).toLocaleString()
+      : 0
 
-  const best=Object.entries(byHour).sort((a,b)=>b[1]-a[1])[0]
-  document.getElementById("bestHour").textContent=best?`${best[0]}:00-${+best[0]+1}:00`:"-"
+  // Forecast (ค่าเฉลี่ยต่อวัน x 7)
+  const days = Object.keys(daily).length || 1
+  forecast.textContent = Math.round((total / days) * 7).toLocaleString()
 
-  if(chart) chart.destroy()
-  chart=new Chart(revenueChart,{
-    type:"line",
-    data:{labels:Object.keys(byDay),datasets:[{data:Object.values(byDay),label:"รายได้",borderColor:"#22d3ee",fill:false}]}
+  // Chart
+  const labels = Object.keys(daily)
+  const values = Object.values(daily)
+
+  if (chart) chart.destroy()
+  chart = new Chart(salesChart, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        label: "ยอดขาย",
+        data: values,
+        borderColor: "#22c55e",
+        tension: 0.3
+      }]
+    }
   })
 
-  /* 🔮 Forecast */
-  const last7=Object.values(byDay).slice(-7)
-  const avg=last7.reduce((a,b)=>a+b,0)/7||0
-  document.getElementById("forecastBox").textContent=
-    "ประมาณ "+Math.round(avg*7).toLocaleString()+" ฿"
+  // Menu Analysis
+  const totalQty = Object.values(menu).reduce((a,b)=>a+b,0) || 1
+  const push=[], cut=[]
 
-  /* 📦 Menu analysis */
-  const push=[],cut=[]
   Object.entries(menu).forEach(([id,qty])=>{
-    const ratio=qty/Object.values(menu).reduce((a,b)=>a+b,0)
-    if(ratio>0.2) push.push(`เมนู ${id} (${qty} ชาม)`)
-    if(ratio<0.05) cut.push(`เมนู ${id} (${qty} ชาม)`)
+    const ratio = qty / totalQty
+    const name = productNameMap[id] || "ไม่ทราบชื่อ"
+
+    if (ratio > 0.2) push.push(`${name} (${qty} ชาม)`)
+    if (ratio < 0.05) cut.push(`${name} (${qty} ชาม)`)
   })
-  pushMenu.innerHTML=push.map(i=>`<li>${i}</li>`).join("")||"<li>-</li>"
-  cutMenu.innerHTML=cut.map(i=>`<li>${i}</li>`).join("")||"<li>-</li>"
+
+  pushMenu.innerHTML = push.length ? push.map(i=>`<li>${i}</li>`).join("") : "<li>-</li>"
+  cutMenu.innerHTML = cut.length ? cut.map(i=>`<li>${i}</li>`).join("") : "<li>-</li>"
 }
 
 /* ================= EXPORT ================= */
-function exportCSV(){
-  let csv="date,product_id,qty,price,total\n"
-  rawRows.forEach(r=>{
-    csv+=`${r.created_at.slice(0,10)},${r.product_id},${r.qty},${r.price},${r.qty*r.price}\n`
-  })
-  const blob=new Blob([csv],{type:"text/csv"})
-  const a=document.createElement("a")
-  a.href=URL.createObjectURL(blob)
-  a.download="sales.csv"
-  a.click()
+function exportExcel() {
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["Dashboard Export"],
+    ["ยอดขายรวม", totalSales.textContent],
+    ["Forecast อาทิตย์หน้า", forecast.textContent]
+  ])
+  XLSX.utils.book_append_sheet(wb, ws, "Summary")
+  XLSX.writeFile(wb, "dashboard.xlsx")
 }
 
-loadDashboard()
+/* ================= INIT ================= */
+rangeSelect.onchange = loadDashboard
+
+;(async()=>{
+  await loadProductNames()
+  loadDashboard()
+})()
 </script>
 
 </body>
