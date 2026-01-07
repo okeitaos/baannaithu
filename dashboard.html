@@ -2,25 +2,77 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>👨‍🍳 Kitchen (By Bill)</title>
+<title>📊 Dashboard ยอดขาย</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <link rel="icon" href="data:,">
 </head>
 
 <body class="bg-slate-900 text-white min-h-screen p-3">
 
-<audio
-  id="dingSound"
-  src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg">
-</audio>
+<div class="max-w-7xl mx-auto space-y-4">
 
-<div class="max-w-7xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว (แสดงเป็นบิล)</h1>
-  <div id="billList" class="grid md:grid-cols-2 gap-4"></div>
+  <!-- Header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <h1 class="text-2xl font-bold">📊 Dashboard ยอดขาย</h1>
+    <button
+      onclick="exportExcel()"
+      class="bg-green-600 px-4 py-2 rounded font-bold">
+      📤 Export Excel
+    </button>
+  </div>
+
+  <!-- Summary -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div class="bg-slate-800 p-4 rounded-xl">
+      <div class="text-sm text-gray-400">ยอดขายวันนี้</div>
+      <div id="todayTotal" class="text-2xl font-bold">0 ฿</div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded-xl">
+      <div class="text-sm text-gray-400">ยอดขายเดือนนี้</div>
+      <div id="monthTotal" class="text-2xl font-bold">0 ฿</div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded-xl">
+      <div class="text-sm text-gray-400">จำนวนบิล</div>
+      <div id="orderCount" class="text-2xl font-bold">0</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="bg-slate-800 p-4 rounded-xl">
+      <h2 class="font-bold mb-2">📈 ยอดขายรายวัน</h2>
+      <canvas id="dailyChart"></canvas>
+    </div>
+    <div class="bg-slate-800 p-4 rounded-xl">
+      <h2 class="font-bold mb-2">🍜 ยอดขายตามเมนู</h2>
+      <canvas id="productChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="bg-slate-800 p-4 rounded-xl">
+    <h2 class="font-bold mb-3">🧾 รายการขายทั้งหมด</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-600">
+            <th class="py-2 text-left">วันที่</th>
+            <th class="text-left">เมนู</th>
+            <th class="text-right">จำนวน</th>
+            <th class="text-right">ยอด</th>
+          </tr>
+        </thead>
+        <tbody id="saleTable"></tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -31,206 +83,115 @@ const sb = supabase.createClient(
 )
 
 /* ================= STATE ================= */
-const billList = document.getElementById("billList")
-const ding = document.getElementById("dingSound")
-
+let saleRows = []
 let productMap = {}
-let tableMap = {}
-let orderTableMap = {}
-let knownOrderIds = new Set()
 
-/* ================= MASTER ================= */
+/* ================= LOAD PRODUCTS ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
   ;(data || []).forEach(p => productMap[p.id] = p.name)
 }
 
-async function loadTables() {
-  const { data } = await sb.from("tables").select("id,table_no")
-  ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
-}
-
-async function loadOrdersMap() {
-  const { data } = await sb.from("orders").select("id,table_id")
-  orderTableMap = {}
-  ;(data || []).forEach(o => {
-    orderTableMap[o.id] = tableMap[o.table_id] || "-"
-  })
-}
-
-/* ================= LOAD BILLS ================= */
-async function loadBills(playSound = false) {
-  const { data, error } = await sb
+/* ================= LOAD SALES ================= */
+async function loadSales() {
+  const { data } = await sb
     .from("order_items")
-    .select(`
-      id,
-      order_id,
-      product_id,
-      mix_sauce_id,
-      qty,
-      option_special,
-      option_mix,
-      status
-    `)
-    .eq("status", "pending")
-    .order("created_at", { ascending: true })
+    .select("product_id,qty,price,orders(paid_at)")
+    .eq("status", "done")
 
-  if (error) {
-    console.error(error)
-    return
-  }
-
-  billList.innerHTML = ""
-
-  const bills = {}
-  ;(data || []).forEach(it => {
-    if (!bills[it.order_id]) bills[it.order_id] = []
-    bills[it.order_id].push(it)
-  })
-
-  let hasNew = false
-
-  Object.entries(bills).forEach(([orderId, items]) => {
-    if (!knownOrderIds.has(orderId)) {
-      knownOrderIds.add(orderId)
-      hasNew = true
-    }
-
-    const tableNo = orderTableMap[orderId] || "-"
-    const card = document.createElement("div")
-    card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
-
-    const itemsHTML = items.map(it => {
-      const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
-      const mixName =
-        it.option_mix && it.mix_sauce_id
-          ? productMap[it.mix_sauce_id]
-          : ""
-
-      return `
-        <div class="flex justify-between items-center border-b border-slate-700 py-1">
-          <div>
-            ${name}
-            ${it.option_special ? "(พิเศษ)" : ""}
-            ${mixName ? `(ผสม ${mixName})` : ""}
-          </div>
-          <div class="flex items-center gap-2">
-            <button class="minus bg-slate-600 px-2 rounded" data-id="${it.id}" data-qty="${it.qty}">-</button>
-            <span class="font-bold">${it.qty}</span>
-            <button class="cancel text-white bg-red-600 px-2 rounded" data-id="${it.id}">✕</button>
-          </div>
-        </div>
-      `
-    }).join("")
-
-    card.innerHTML = `
-      <div class="flex justify-between items-center mb-3">
-        <div class="text-lg font-bold">🍽️ โต๊ะ ${tableNo}</div>
-        <button class="doneBill bg-green-600 px-4 py-1 rounded">
-          ✅ เสร็จทั้งบิล
-        </button>
-      </div>
-      ${itemsHTML}
-    `
-
-    /* ➖ ลดจำนวน */
-    card.querySelectorAll(".minus").forEach(btn => {
-      btn.onclick = async () => {
-        const id = btn.dataset.id
-        const qty = Number(btn.dataset.qty) - 1
-
-        if (qty <= 0) {
-          await sb.from("order_items")
-            .update({ status: "cancelled" })
-            .eq("id", id)
-        } else {
-          await sb.from("order_items")
-            .update({ qty })
-            .eq("id", id)
-        }
-
-        loadBills()
-      }
-    })
-
-    /* ❌ ลบ */
-    card.querySelectorAll(".cancel").forEach(btn => {
-      btn.onclick = async () => {
-        const id = btn.dataset.id
-
-        const c = await Swal.fire({
-          title: "ยกเลิกรายการนี้?",
-          icon: "warning",
-          showCancelButton: true,
-          confirmButtonText: "ยกเลิก",
-          cancelButtonText: "ไม่"
-        })
-        if (!c.isConfirmed) return
-
-        await sb.from("order_items")
-          .update({ status: "cancelled" })
-          .eq("id", id)
-
-        loadBills()
-      }
-    })
-
-    /* ✅ เสร็จทั้งบิล */
-    card.querySelector(".doneBill").onclick = async () => {
-      const c = await Swal.fire({
-        title: `ยืนยันเสร็จทั้งบิล โต๊ะ ${tableNo}`,
-        icon: "question",
-        showCancelButton: true,
-        confirmButtonText: "เสร็จแล้ว",
-        cancelButtonText: "ยัง"
-      })
-      if (!c.isConfirmed) return
-
-      await sb.from("order_items")
-        .update({ status: "done" })
-        .eq("order_id", orderId)
-        .eq("status", "pending")
-
-      loadBills()
-    }
-
-    billList.appendChild(card)
-  })
-
-  if (playSound && hasNew) {
-    ding.currentTime = 0
-    ding.play().catch(()=>{})
-  }
+  saleRows = data || []
+  renderDashboard()
 }
 
-/* ================= REALTIME ================= */
-const channel = sb.channel("kitchen-bill")
+/* ================= RENDER ================= */
+function renderDashboard() {
+  const today = new Date().toISOString().slice(0,10)
+  const month = today.slice(0,7)
 
-channel.on(
-  "postgres_changes",
-  { event: "INSERT", schema: "public", table: "order_items" },
-  async payload => {
-    if (payload.new.status === "pending") {
-      await loadOrdersMap()
-      loadBills(true)
-    }
-  }
-)
+  let todayTotal = 0
+  let monthTotal = 0
 
-channel.on(
-  "postgres_changes",
-  { event: "UPDATE", schema: "public", table: "order_items" },
-  () => loadBills()
-)
+  const dailyMap = {}
+  const productMapSum = {}
 
-channel.subscribe()
+  saleRows.forEach(r => {
+    const date = r.orders?.paid_at?.slice(0,10)
+    if (!date) return
+
+    const total = r.qty * r.price
+
+    if (date === today) todayTotal += total
+    if (date.startsWith(month)) monthTotal += total
+
+    dailyMap[date] = (dailyMap[date] || 0) + total
+    productMapSum[r.product_id] = (productMapSum[r.product_id] || 0) + total
+  })
+
+  todayTotalEl.textContent = todayTotal.toLocaleString() + " ฿"
+  monthTotalEl.textContent = monthTotal.toLocaleString() + " ฿"
+  orderCount.textContent = Object.keys(dailyMap).length
+
+  renderDailyChart(dailyMap)
+  renderProductChart(productMapSum)
+  renderTable()
+}
+
+/* ================= CHARTS ================= */
+function renderDailyChart(map) {
+  const labels = Object.keys(map)
+  const data = Object.values(map)
+
+  new Chart(document.getElementById("dailyChart"), {
+    type: "line",
+    data: { labels, datasets: [{ label: "ยอดขาย", data }] }
+  })
+}
+
+function renderProductChart(map) {
+  const labels = Object.keys(map).map(id => productMap[id])
+  const data = Object.values(map)
+
+  new Chart(document.getElementById("productChart"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: "ยอดขาย", data }] }
+  })
+}
+
+/* ================= TABLE ================= */
+function renderTable() {
+  saleTable.innerHTML = ""
+  saleRows.forEach(r => {
+    const tr = document.createElement("tr")
+    tr.className = "border-b border-slate-700"
+    tr.innerHTML = `
+      <td class="py-1">${r.orders?.paid_at?.slice(0,10) || "-"}</td>
+      <td>${productMap[r.product_id]}</td>
+      <td class="text-right">${r.qty}</td>
+      <td class="text-right">${(r.qty*r.price).toLocaleString()}</td>
+    `
+    saleTable.appendChild(tr)
+  })
+}
+
+/* ================= EXPORT ================= */
+function exportExcel() {
+  const rows = saleRows.map(r => ({
+    date: r.orders?.paid_at,
+    product: productMap[r.product_id],
+    qty: r.qty,
+    total: r.qty * r.price
+  }))
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, "Sales")
+  XLSX.writeFile(wb, "sales.xlsx")
+}
 
 /* ================= INIT ================= */
 ;(async () => {
   await loadProducts()
-  await loadTables()
-  await loadOrdersMap()
-  loadBills()
+  await loadSales()
 })()
 </script>
 
