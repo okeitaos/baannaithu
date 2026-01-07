@@ -14,28 +14,25 @@
 
 <body class="bg-slate-900 text-white min-h-screen p-4">
 
-<audio id="dingSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
-
 <div class="max-w-7xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว (แสดงเป็นบิล)</h1>
+  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว (จัดการออร์เดอร์)</h1>
   <div id="billList" class="grid md:grid-cols-2 gap-4"></div>
 </div>
 
 <script>
 /* ================= CONFIG ================= */
-const SUPABASE_URL = "https://nvsptbbvxjulrpdebrhn.supabase.co"
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+const sb = supabase.createClient(
+  "https://nvsptbbvxjulrpdebrhn.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+)
 
 /* ================= STATE ================= */
 const billList = document.getElementById("billList")
-const ding = document.getElementById("dingSound")
-
 let productMap = {}
 let tableMap = {}
 let orderTableMap = {}
 
-/* ================= LOAD MASTER ================= */
+/* ================= MASTER ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
   ;(data || []).forEach(p => productMap[p.id] = p.name)
@@ -47,14 +44,118 @@ async function loadTables() {
 }
 
 async function loadOrdersMap() {
-  const { data } = await sb.from("orders").select("id,table_id")
+  const { data } = await sb
+    .from("orders")
+    .select("id,table_id")
+    .eq("status", "open")
+
   orderTableMap = {}
   ;(data || []).forEach(o => {
     orderTableMap[o.id] = tableMap[o.table_id] || "-"
   })
 }
 
+/* ================= LOAD BILLS ================= */
+async function loadBills() {
+  billList.innerHTML = ""
+
+  const { data, error } = await sb
+    .from("order_items")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    console.error(error)
+    return
+  }
+
+  const bills = {}
+  ;(data || []).forEach(item => {
+    if (!bills[item.order_id]) bills[item.order_id] = []
+    bills[item.order_id].push(item)
+  })
+
+  for (const [orderId, items] of Object.entries(bills)) {
+    const tableNo = orderTableMap[orderId] || "-"
+
+    const card = document.createElement("div")
+    card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
+
+    let itemsHTML = ""
+
+    items.forEach(it => {
+      const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
+
+      itemsHTML += `
+        <div class="flex justify-between items-center border-b border-slate-700 py-1">
+          <div class="flex-1">
+            ${name}
+            ${it.option_special ? "(พิเศษ)" : ""}
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button class="dec bg-slate-600 px-2 rounded">−</button>
+            <span class="font-bold">${it.qty}</span>
+            <button class="inc bg-slate-600 px-2 rounded">+</button>
+            <button class="split bg-blue-600 px-2 rounded">⇄</button>
+            <button class="cancel text-white bg-red-600 px-2 rounded">✕</button>
+          </div>
+        </div>
+      `
+    })
+
+    card.innerHTML = `
+      <div class="flex justify-between mb-3">
+        <div class="font-bold text-lg">🍽️ โต๊ะ ${tableNo}</div>
+      </div>
+      ${itemsHTML}
+    `
+
+    /* ===== bind actions ===== */
+    const rows = card.querySelectorAll(".border-b")
+    rows.forEach((row, index) => {
+      const item = items[index]
+
+      // ลด
+      row.querySelector(".dec").onclick = () =>
+        updateQty(item, item.qty - 1)
+
+      // เพิ่ม
+      row.querySelector(".inc").onclick = () =>
+        updateQty(item, item.qty + 1)
+
+      // split
+      row.querySelector(".split").onclick = () =>
+        splitItem(item)
+
+      // cancel
+      row.querySelector(".cancel").onclick = () =>
+        cancelItem(item)
+    })
+
+    billList.appendChild(card)
+  }
+}
+
 /* ================= ACTIONS ================= */
+
+// update qty
+async function updateQty(item, newQty) {
+  if (newQty <= 0) {
+    await cancelItem(item)
+    return
+  }
+
+  await sb
+    .from("order_items")
+    .update({ qty: newQty })
+    .eq("id", item.id)
+
+  loadBills()
+}
+
+// cancel item
 async function cancelItem(item) {
   const confirm = await Swal.fire({
     title: "ยกเลิกรายการนี้?",
@@ -63,122 +164,53 @@ async function cancelItem(item) {
     confirmButtonText: "ยกเลิก",
     cancelButtonText: "ไม่"
   })
+
   if (!confirm.isConfirmed) return
 
-  await sb.from("order_items")
+  await sb
+    .from("order_items")
     .update({ status: "cancelled" })
     .eq("id", item.id)
 
   loadBills()
 }
 
-async function reduceItem(item) {
-  // ถ้าเหลือ 1 → ยกเลิกทั้งรายการ
-  if (item.qty <= 1) {
-    return cancelItem(item)
+// split item
+async function splitItem(item) {
+  if (item.qty < 2) {
+    Swal.fire("ไม่สามารถแยกได้", "จำนวนต้องมากกว่า 1", "info")
+    return
   }
 
-  // 1) ลด qty ตัวเดิมลง 1
-  await sb.from("order_items")
+  // ลดของเดิม
+  await sb
+    .from("order_items")
     .update({ qty: item.qty - 1 })
     .eq("id", item.id)
 
-  // 2) สร้าง cancelled item (copy field สำคัญให้ครบ)
-  await sb.from("order_items").insert({
-    order_id: item.order_id,
-    product_id: item.product_id,
-    mix_sauce_id: item.mix_sauce_id,
-    qty: 1,
-    price: item.price,              // ⭐ สำคัญ แก้ 400 error
-    option_special: item.option_special,
-    option_mix: item.option_mix,
-    status: "cancelled"
-  })
+  // เพิ่มรายการใหม่ qty = 1
+  await sb
+    .from("order_items")
+    .insert({
+      order_id: item.order_id,
+      product_id: item.product_id,
+      qty: 1,
+      price: item.price,
+      status: "pending",
+      option_special: item.option_special,
+      option_mix: item.option_mix,
+      mix_sauce_id: item.mix_sauce_id
+    })
 
   loadBills()
 }
-
-/* ================= LOAD BILLS ================= */
-async function loadBills(playSound = false) {
-  await loadOrdersMap()
-
-  const { data } = await sb
-    .from("order_items")
-    .select("*")
-    .eq("status", "pending")
-    .order("created_at", { ascending: true })
-
-  billList.innerHTML = ""
-  const bills = {}
-
-  ;(data || []).forEach(item => {
-    if (!bills[item.order_id]) bills[item.order_id] = []
-    bills[item.order_id].push(item)
-  })
-
-  Object.entries(bills).forEach(([orderId, items]) => {
-    const tableNo = orderTableMap[orderId] || "-"
-    const card = document.createElement("div")
-    card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
-
-    const itemsHTML = items.map(it => {
-      const name = productMap[it.product_id] || "-"
-      return `
-        <div class="border-b border-slate-700 py-2">
-          <div class="flex justify-between items-center">
-            <div>${name} x ${it.qty}</div>
-            <div class="flex gap-2">
-              <button class="bg-yellow-500 px-2 rounded reduce">➖</button>
-              <button class="bg-white text-black px-2 rounded cancel">❌</button>
-            </div>
-          </div>
-        </div>
-      `
-    }).join("")
-
-    card.innerHTML = `
-      <div class="flex justify-between mb-3">
-        <div class="font-bold text-lg">🍽️ โต๊ะ ${tableNo}</div>
-        <button class="doneBill bg-green-600 px-4 py-1 rounded">
-          ✅ เสร็จทั้งบิล
-        </button>
-      </div>
-      ${itemsHTML}
-    `
-
-    card.querySelector(".doneBill").onclick = async () => {
-      await sb.from("order_items")
-        .update({ status: "done" })
-        .eq("order_id", orderId)
-      loadBills()
-    }
-
-    card.querySelectorAll(".cancel").forEach((btn, i) =>
-      btn.onclick = () => cancelItem(items[i])
-    )
-
-    card.querySelectorAll(".reduce").forEach((btn, i) =>
-      btn.onclick = () => reduceItem(items[i])
-    )
-
-    billList.appendChild(card)
-  })
-}
-
-/* ================= REALTIME ================= */
-const channel = sb.channel("kitchen-bill")
-channel.on(
-  "postgres_changes",
-  { event: "*", schema: "public", table: "order_items" },
-  () => loadBills(true)
-)
-channel.subscribe()
 
 /* ================= INIT ================= */
 ;(async () => {
   await loadProducts()
   await loadTables()
-  await loadBills()
+  await loadOrdersMap()
+  loadBills()
 })()
 </script>
 
