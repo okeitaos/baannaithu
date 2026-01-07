@@ -44,14 +44,14 @@
     <div id="kpiAvg" class="text-2xl font-bold">0</div>
   </div>
   <div class="bg-slate-800 p-4 rounded">
-    <div class="text-sm text-gray-400">🔮 คาดการณ์ 7 วัน</div>
+    <div class="text-sm text-gray-400">🔮 Forecast 7 วัน</div>
     <div id="kpiForecast" class="text-2xl font-bold">0</div>
   </div>
 </div>
 
 <!-- INSIGHT -->
 <div class="bg-slate-800 p-4 rounded">
-  <h2 class="font-bold mb-2">🧠 Insight</h2>
+  <h2 class="font-bold mb-2">🧠 Insight ธุรกิจ</h2>
   <ul id="insightBox" class="list-disc pl-5 space-y-1 text-sm"></ul>
 </div>
 
@@ -60,19 +60,30 @@
   <canvas id="revenueChart"></canvas>
 </div>
 
+<!-- MoM + AI -->
+<div class="grid md:grid-cols-2 gap-3">
+  <div class="bg-slate-800 p-4 rounded">
+    <h2 class="font-bold mb-2">🧾 เปรียบเทียบเดือนต่อเดือน</h2>
+    <div id="momCompare" class="text-sm space-y-1"></div>
+  </div>
+  <div class="bg-slate-800 p-4 rounded">
+    <h2 class="font-bold mb-2">🧠 AI แนะนำเมนูอัตโนมัติ</h2>
+    <ul id="aiRecommend" class="list-disc pl-5 space-y-1 text-sm"></ul>
+  </div>
+</div>
+
 <!-- MENU ANALYSIS -->
 <div class="grid md:grid-cols-2 gap-3">
   <div class="bg-slate-800 p-4 rounded">
-    <h2 class="font-bold mb-2">🔥 เมนูตัวทำเงิน</h2>
+    <h2 class="font-bold mb-2">🔥 เมนูควรดัน</h2>
     <ul id="pushMenu" class="list-disc pl-5 space-y-1"></ul>
   </div>
   <div class="bg-slate-800 p-4 rounded">
-    <h2 class="font-bold mb-2">🧊 เมนูควรพิจารณา</h2>
+    <h2 class="font-bold mb-2">🧊 เมนูควรพิจารณาปรับ / ตัด</h2>
     <ul id="cutMenu" class="list-disc pl-5 space-y-1"></ul>
   </div>
 </div>
 
-<!-- EXPORT -->
 <button onclick="exportExcel()" class="bg-green-600 px-4 py-2 rounded font-bold">
 📥 Export Excel
 </button>
@@ -92,35 +103,41 @@ let chart
 /* ================= LOAD PRODUCTS ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
-  ;(data||[]).forEach(p=>productName[p.id]=p.name)
+  ;(data||[]).forEach(p => productName[p.id] = p.name)
 }
 
 /* ================= DATE ================= */
 function rangeStart(type){
-  const d=new Date()
+  const d = new Date()
   if(type==="today") d.setHours(0,0,0,0)
   if(type==="week") d.setDate(d.getDate()-d.getDay())
   if(type==="month") d.setDate(1)
-  if(type==="year"){d.setMonth(0);d.setDate(1)}
+  if(type==="year"){ d.setMonth(0); d.setDate(1) }
   return d.toISOString()
+}
+
+function monthRange(offset){
+  const d = new Date()
+  d.setMonth(d.getMonth()+offset,1)
+  return {
+    start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString(),
+    end: new Date(d.getFullYear(), d.getMonth()+1, 0, 23,59,59).toISOString()
+  }
 }
 
 /* ================= DASHBOARD ================= */
 async function loadDashboard(){
-  const start=rangeStart(rangeSelect.value)
+  const start = rangeStart(rangeSelect.value)
 
   const { data } = await sb
     .from("order_items")
     .select("product_id,qty,price,created_at")
     .eq("status","done")
-    .gte("created_at",start)
+    .gte("created_at", start)
 
-  const rows=data||[]
+  const rows = data || []
 
-  let revenue=0
-  let daily={}
-  let menu={}
-  let hours={}
+  let revenue=0, daily={}, menu={}, hours={}
 
   rows.forEach(r=>{
     const amount=r.price*r.qty
@@ -136,32 +153,24 @@ async function loadDashboard(){
   })
 
   const days=Object.keys(daily).length||1
-  const bills=Object.keys(daily).length
+  const bills=days
 
   kpiRevenue.textContent=revenue.toLocaleString()
   kpiBills.textContent=bills
   kpiAvg.textContent=Math.round(revenue/bills||0).toLocaleString()
   kpiForecast.textContent=Math.round((revenue/days)*7).toLocaleString()
 
-  /* Chart */
   if(chart) chart.destroy()
   chart=new Chart(revenueChart,{
     type:"line",
-    data:{
-      labels:Object.keys(daily),
-      datasets:[{
-        label:"รายได้",
-        data:Object.values(daily),
-        borderColor:"#22c55e",
-        tension:.3
-      }]
+    data:{ labels:Object.keys(daily),
+      datasets:[{ label:"รายได้", data:Object.values(daily), borderColor:"#22c55e", tension:.3 }]
     }
   })
 
-  /* Menu Analysis */
-  const totalQty=Object.values(menu).reduce((a,b)=>a+b,0)||1
   pushMenu.innerHTML=""
   cutMenu.innerHTML=""
+  const totalQty=Object.values(menu).reduce((a,b)=>a+b,0)||1
 
   Object.entries(menu).forEach(([id,qty])=>{
     const name=productName[id]||"ไม่ทราบ"
@@ -170,15 +179,51 @@ async function loadDashboard(){
     if(ratio<0.05) cutMenu.innerHTML+=`<li>${name} (${qty})</li>`
   })
 
-  /* Insight */
   insightBox.innerHTML=""
-  const peakHour=Object.entries(hours).sort((a,b)=>b[1]-a[1])[0]
-  if(peakHour)
-    insightBox.innerHTML+=`<li>ช่วงพีค: ${peakHour[0]}:00 – ${peakHour[0]}:59</li>`
-  if(revenue/days>5000)
-    insightBox.innerHTML+=`<li>ยอดเฉลี่ยต่อวันดี ควรเพิ่มโปรโมชั่นเสริม</li>`
-  if(Object.keys(menu).length>15)
-    insightBox.innerHTML+=`<li>เมนูเยอะ อาจทำให้ครัวช้า</li>`
+  const peak=Object.entries(hours).sort((a,b)=>b[1]-a[1])[0]
+  if(peak) insightBox.innerHTML+=`<li>ช่วงพีค: ${peak[0]}:00 – ${peak[0]}:59</li>`
+  if(revenue/days>5000) insightBox.innerHTML+=`<li>ยอดเฉลี่ยต่อวันดี ควรเพิ่มโปรเสริม</li>`
+}
+
+/* ================= MoM + AI ================= */
+async function loadMoMAndAI(){
+  const cur=monthRange(0)
+  const prev=monthRange(-1)
+
+  const [c,p]=await Promise.all([
+    sb.from("order_items").select("product_id,qty,price").eq("status","done").gte("created_at",cur.start).lte("created_at",cur.end),
+    sb.from("order_items").select("product_id,qty,price").eq("status","done").gte("created_at",prev.start).lte("created_at",prev.end)
+  ])
+
+  const sum=r=>r.reduce((s,i)=>s+i.price*i.qty,0)
+  const curTotal=sum(c.data||[])
+  const prevTotal=sum(p.data||[])
+  const diff=prevTotal?(((curTotal-prevTotal)/prevTotal)*100).toFixed(1):"100"
+
+  momCompare.innerHTML=`
+    <div>เดือนนี้: <b>${curTotal.toLocaleString()}</b> บาท</div>
+    <div>เดือนก่อน: <b>${prevTotal.toLocaleString()}</b> บาท</div>
+    <div>แนวโน้ม: <b class="${diff>=0?'text-green-400':'text-red-400'}">${diff}%</b></div>
+  `
+
+  const map=r=>{
+    const m={}
+    r.forEach(i=>m[i.product_id]=(m[i.product_id]||0)+i.qty)
+    return m
+  }
+
+  const cm=map(c.data||[])
+  const pm=map(p.data||[])
+
+  aiRecommend.innerHTML=""
+  Object.keys(productName).forEach(id=>{
+    const c=cm[id]||0, p=pm[id]||0
+    if(c>=p*1.5 && c>=5) aiRecommend.innerHTML+=`<li>🔥 ${productName[id]} โต → ควรดัน</li>`
+    else if(c<=p*0.5 && p>=5) aiRecommend.innerHTML+=`<li>⚠️ ${productName[id]} ยอดตก</li>`
+    else if(c<=1 && p<=1) aiRecommend.innerHTML+=`<li>🧊 ${productName[id]} ขายต่ำ → พิจารณาตัด</li>`
+  })
+
+  if(!aiRecommend.innerHTML) aiRecommend.innerHTML="<li>ยังไม่พบสัญญาณผิดปกติ</li>"
 }
 
 /* ================= EXPORT ================= */
@@ -192,11 +237,12 @@ function exportExcel(){
   XLSX.writeFile(wb,"dashboard_pro_ultra.xlsx")
 }
 
-rangeSelect.onchange=loadDashboard
+rangeSelect.onchange=()=>{ loadDashboard(); loadMoMAndAI() }
 
 ;(async()=>{
   await loadProducts()
   loadDashboard()
+  loadMoMAndAI()
 })()
 </script>
 
