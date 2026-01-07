@@ -83,22 +83,22 @@ async function loadTables() {
 async function loadOpenTables() {
   tableList.innerHTML = ""
 
-  // 1) หา orders ที่ยังไม่ paid
+  // 1) เอาเฉพาะ order ที่ยังไม่ paid
   const { data: orders } = await sb
     .from("orders")
     .select("id,table_id")
     .neq("status", "paid")
 
-  if (!orders) return
+  if (!orders || orders.length === 0) return
 
-  // group by table
+  // group order ตามโต๊ะ
   const tableOrders = {}
   orders.forEach(o => {
     if (!tableOrders[o.table_id]) tableOrders[o.table_id] = []
     tableOrders[o.table_id].push(o.id)
   })
 
-  // 2) เช็กว่าโต๊ะนั้นไม่มี pending เหลือ
+  // 2) โต๊ะจะโชว์ได้ ต้องไม่มี pending
   for (const [tableId, orderIds] of Object.entries(tableOrders)) {
     const { data: pending } = await sb
       .from("order_items")
@@ -107,7 +107,7 @@ async function loadOpenTables() {
       .eq("status", "pending")
       .limit(1)
 
-    if (pending && pending.length > 0) continue // ยังไม่พร้อมคิดเงิน
+    if (pending && pending.length > 0) continue
 
     const btn = document.createElement("button")
     btn.className = "w-full bg-blue-600 py-2 rounded"
@@ -117,7 +117,7 @@ async function loadOpenTables() {
   }
 }
 
-/* ================= LOAD BILL ================= */
+/* ================= LOAD BILL BY TABLE ================= */
 async function loadBillByTable(tableId) {
   currentTableId = tableId
   paymentMethod = null
@@ -126,6 +126,7 @@ async function loadBillByTable(tableId) {
   billItems.innerHTML = ""
   let total = 0
 
+  // ดึงเฉพาะ order ที่ยังไม่ paid
   const { data: orders } = await sb
     .from("orders")
     .select("id")
@@ -133,11 +134,12 @@ async function loadBillByTable(tableId) {
     .neq("status", "paid")
 
   for (const order of orders || []) {
+    // คิดเงินเฉพาะ item ที่ done
     const { data: items } = await sb
       .from("order_items")
       .select("*")
       .eq("order_id", order.id)
-      .eq("status", "done")   // ⭐ สำคัญ
+      .eq("status", "done")
 
     ;(items || []).forEach(it => {
       const p = productMap[it.product_id]
@@ -186,7 +188,7 @@ payBtn.onclick = async () => {
 
   if (!confirm.isConfirmed) return
 
-  // 1) ปิด order
+  // 1) ปิด order ทั้งหมดของโต๊ะนี้ (เฉพาะที่ยังไม่ paid)
   await sb.from("orders")
     .update({
       status: "paid",
@@ -203,6 +205,7 @@ payBtn.onclick = async () => {
 
   Swal.fire("สำเร็จ", "ปิดบิลเรียบร้อย", "success")
 
+  // reset state
   currentTableId = null
   billItems.innerHTML = ""
   totalPrice.textContent = 0
