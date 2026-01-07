@@ -30,7 +30,6 @@ let productMap = {}
 let tableMap = {}
 let orderTableMap = {}
 
-/* ===== master ===== */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
   data.forEach(p => productMap[p.id] = p.name)
@@ -47,7 +46,6 @@ async function loadOrdersMap() {
   data.forEach(o => orderTableMap[o.id] = tableMap[o.table_id])
 }
 
-/* ===== load ===== */
 async function loadBills() {
   billList.innerHTML = ""
 
@@ -81,16 +79,15 @@ async function loadBills() {
         </div>
       `).join("")}
     `
-
     billList.appendChild(card)
   })
 }
 
-/* ===== actions ===== */
+/* ===== ACTION HANDLER ===== */
 document.addEventListener("click", async e => {
+  const cancel = e.target.dataset.cancel
   const dec = e.target.dataset.dec
   const inc = e.target.dataset.inc
-  const cancel = e.target.dataset.cancel
 
   if (cancel) {
     const res = await Swal.fire({
@@ -98,7 +95,9 @@ document.addEventListener("click", async e => {
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "ยกเลิก",
-      cancelButtonText: "ไม่"
+      cancelButtonText: "ไม่",
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#64748b"
     })
     if (!res.isConfirmed) return
 
@@ -119,12 +118,10 @@ document.addEventListener("click", async e => {
     } else {
       await sb.from("order_items").update({qty:newQty}).eq("id",id)
     }
-
     loadBills()
   }
 })
 
-/* ===== init ===== */
 ;(async()=>{
   await loadProducts()
   await loadTables()
