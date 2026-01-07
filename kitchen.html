@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>👨‍🍳 Kitchen</title>
+<title>👨‍🍳 Kitchen (Realtime)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -14,54 +14,58 @@
 <body class="bg-slate-900 text-white min-h-screen p-4">
 
 <div class="max-w-7xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว</h1>
+  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว (Realtime)</h1>
   <div id="billList" class="grid md:grid-cols-2 gap-4"></div>
 </div>
 
 <script>
+/* ================= CONFIG ================= */
 const sb = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
 
+/* ================= STATE ================= */
 const billList = document.getElementById("billList")
 let productMap = {}
 let tableMap = {}
 let orderTableMap = {}
 
-/* ===== master ===== */
+/* ================= MASTER ================= */
 async function loadProducts() {
   const { data } = await sb.from("products").select("id,name")
-  data.forEach(p => productMap[p.id] = p.name)
+  ;(data || []).forEach(p => productMap[p.id] = p.name)
 }
 
 async function loadTables() {
   const { data } = await sb.from("tables").select("id,table_no")
-  data.forEach(t => tableMap[t.id] = t.table_no)
+  ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
 }
 
 async function loadOrdersMap() {
   const { data } = await sb
     .from("orders")
     .select("id,table_id")
-    .eq("status","open")
+    .eq("status", "open")
 
   orderTableMap = {}
-  data.forEach(o => orderTableMap[o.id] = tableMap[o.table_id])
+  ;(data || []).forEach(o => {
+    orderTableMap[o.id] = tableMap[o.table_id] || "-"
+  })
 }
 
-/* ===== load bills ===== */
+/* ================= LOAD BILLS ================= */
 async function loadBills() {
   billList.innerHTML = ""
 
   const { data } = await sb
     .from("order_items")
     .select("*")
-    .eq("status","pending")
-    .order("created_at",{ascending:true})
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
 
   const grouped = {}
-  data.forEach(it => {
+  ;(data || []).forEach(it => {
     if (!grouped[it.order_id]) grouped[it.order_id] = []
     grouped[it.order_id].push(it)
   })
@@ -75,8 +79,7 @@ async function loadBills() {
         <div class="font-bold text-lg">
           🍽️ โต๊ะ ${orderTableMap[orderId] || "-"}
         </div>
-        <button
-          data-confirm-order="${orderId}"
+        <button data-confirm="${orderId}"
           class="bg-green-600 px-3 py-1 rounded font-bold">
           ✅ ยืนยันออร์เดอร์
         </button>
@@ -85,11 +88,11 @@ async function loadBills() {
       ${items.map(it => `
         <div class="flex justify-between items-center border-b py-1">
           <div>${productMap[it.product_id]} x ${it.qty}</div>
-          <button
-            data-cancel-item="${it.id}"
-            class="bg-red-600 px-2 rounded text-white">
-            ✕
-          </button>
+          <div class="flex gap-2">
+            <button data-dec="${it.id}" class="bg-slate-600 px-2 rounded">−</button>
+            <button data-inc="${it.id}" class="bg-slate-600 px-2 rounded">+</button>
+            <button data-cancel="${it.id}" class="bg-red-600 px-2 rounded">✕</button>
+          </div>
         </div>
       `).join("")}
     `
@@ -97,15 +100,16 @@ async function loadBills() {
   })
 }
 
-/* ===== actions ===== */
+/* ================= ACTIONS ================= */
 document.addEventListener("click", async e => {
+  const dec = e.target.dataset.dec
+  const inc = e.target.dataset.inc
+  const cancel = e.target.dataset.cancel
+  const confirm = e.target.dataset.confirm
 
-  /* ยืนยันออร์เดอร์ทั้งบิล */
-  const confirmOrderId = e.target.dataset.confirmOrder
-  if (confirmOrderId) {
-    const res = await Swal.fire({
+  if (confirm) {
+    const ok = await Swal.fire({
       title: "ยืนยันออร์เดอร์ทั้งบิล?",
-      text: "รายการทั้งหมดจะถูกส่งไปคิดเงิน",
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "ยืนยัน",
@@ -113,20 +117,16 @@ document.addEventListener("click", async e => {
       confirmButtonColor: "#16a34a",
       cancelButtonColor: "#64748b"
     })
-    if (!res.isConfirmed) return
+    if (!ok.isConfirmed) return
 
     await sb.from("order_items")
       .update({ status: "done" })
-      .eq("order_id", confirmOrderId)
+      .eq("order_id", confirm)
       .eq("status", "pending")
-
-    loadBills()
   }
 
-  /* ยกเลิกรายการเดียว */
-  const cancelItemId = e.target.dataset.cancelItem
-  if (cancelItemId) {
-    const res = await Swal.fire({
+  if (cancel) {
+    const ok = await Swal.fire({
       title: "ยกเลิกรายการนี้?",
       icon: "warning",
       showCancelButton: true,
@@ -135,18 +135,52 @@ document.addEventListener("click", async e => {
       confirmButtonColor: "#dc2626",
       cancelButtonColor: "#64748b"
     })
-    if (!res.isConfirmed) return
+    if (!ok.isConfirmed) return
 
     await sb.from("order_items")
       .update({ status: "cancelled" })
-      .eq("id", cancelItemId)
+      .eq("id", cancel)
+  }
 
-    loadBills()
+  if (dec || inc) {
+    const id = dec || inc
+    const { data:[item] } = await sb
+      .from("order_items")
+      .select("qty")
+      .eq("id", id)
+
+    const newQty = dec ? item.qty - 1 : item.qty + 1
+    if (newQty <= 0) {
+      await sb.from("order_items")
+        .update({ status: "cancelled" })
+        .eq("id", id)
+    } else {
+      await sb.from("order_items")
+        .update({ qty: newQty })
+        .eq("id", id)
+    }
   }
 })
 
-/* ===== init ===== */
-;(async()=>{
+/* ================= REALTIME ================= */
+sb.channel("kitchen-realtime")
+  .on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "order_items" },
+    () => loadBills()
+  )
+  .on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "orders" },
+    async () => {
+      await loadOrdersMap()
+      loadBills()
+    }
+  )
+  .subscribe()
+
+/* ================= INIT ================= */
+;(async () => {
   await loadProducts()
   await loadTables()
   await loadOrdersMap()
