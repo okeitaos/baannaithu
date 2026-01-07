@@ -2,72 +2,53 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8" />
-<title>📊 Dashboard ยอดขาย</title>
+<title>📊 Dashboard (Owner Mode)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" href="data:,">
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 
-<body class="bg-slate-900 text-white min-h-screen p-4">
+<body class="bg-slate-900 text-white min-h-screen p-3">
 
 <div class="max-w-7xl mx-auto space-y-4">
 
-  <div class="flex justify-between items-center">
-    <h1 class="text-2xl font-bold">📊 Dashboard ยอดขาย</h1>
-    <button onclick="exportExcel()"
-      class="bg-green-600 px-4 py-2 rounded font-bold">
-      📥 Export Excel
-    </button>
-  </div>
+  <!-- HEADER -->
+  <h1 class="text-2xl font-bold">📊 ภาพรวมร้าน (Owner Mode)</h1>
 
-  <!-- SUMMARY -->
-  <div class="grid md:grid-cols-3 gap-4">
-    <div class="bg-slate-800 p-4 rounded">
-      <div class="text-sm text-gray-400">ยอดขายวันนี้</div>
-      <div id="todayTotal" class="text-2xl font-bold">0 ฿</div>
-    </div>
+  <!-- KPI -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
     <div class="bg-slate-800 p-4 rounded">
       <div class="text-sm text-gray-400">ยอดขายเดือนนี้</div>
-      <div id="monthTotal" class="text-2xl font-bold">0 ฿</div>
+      <div id="thisMonth" class="text-2xl font-bold">0 ฿</div>
+      <div id="compareText" class="text-sm mt-1"></div>
     </div>
+
+    <div class="bg-slate-800 p-4 rounded">
+      <div class="text-sm text-gray-400">ยอดขายเดือนก่อน</div>
+      <div id="lastMonth" class="text-2xl font-bold">0 ฿</div>
+      <div class="text-sm text-gray-500">ใช้เทียบแนวโน้ม</div>
+    </div>
+
     <div class="bg-slate-800 p-4 rounded">
       <div class="text-sm text-gray-400">จำนวนรายการขาย</div>
       <div id="orderCount" class="text-2xl font-bold">0</div>
+      <div class="text-sm text-gray-500">ทั้งหมดที่ปิดบิลแล้ว</div>
     </div>
   </div>
 
-  <!-- CHART -->
-  <div class="grid md:grid-cols-2 gap-4">
-    <div class="bg-slate-800 p-4 rounded">
-      <h2 class="font-bold mb-2">📈 ยอดขายรายวัน</h2>
-      <canvas id="dailyChart"></canvas>
-    </div>
-    <div class="bg-slate-800 p-4 rounded">
-      <h2 class="font-bold mb-2">🍜 ยอดขายตามเมนู</h2>
-      <canvas id="productChart"></canvas>
-    </div>
-  </div>
-
-  <!-- TABLE -->
+  <!-- COMPARE CHART -->
   <div class="bg-slate-800 p-4 rounded">
-    <h2 class="font-bold mb-3">📄 รายการขายทั้งหมด</h2>
-    <div class="overflow-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-600">
-            <th class="text-left p-2">วันที่</th>
-            <th class="text-left p-2">เมนู</th>
-            <th class="text-right p-2">จำนวน</th>
-            <th class="text-right p-2">ยอด</th>
-          </tr>
-        </thead>
-        <tbody id="saleTable"></tbody>
-      </table>
-    </div>
+    <h2 class="font-bold mb-2">📈 เปรียบเทียบยอดขาย (เดือนนี้ vs เดือนก่อน)</h2>
+    <canvas id="compareChart"></canvas>
+  </div>
+
+  <!-- TOP SELLER -->
+  <div class="bg-slate-800 p-4 rounded">
+    <h2 class="font-bold mb-2">🔥 สินค้าขายดีเดือนนี้</h2>
+    <div id="topSeller" class="space-y-1 text-sm"></div>
   </div>
 
 </div>
@@ -80,148 +61,99 @@ const sb = supabase.createClient(
 )
 
 /* ================= ELEMENT ================= */
-const todayTotalEl = document.getElementById("todayTotal")
-const monthTotalEl = document.getElementById("monthTotal")
+const thisMonthEl = document.getElementById("thisMonth")
+const lastMonthEl = document.getElementById("lastMonth")
+const compareTextEl = document.getElementById("compareText")
 const orderCountEl = document.getElementById("orderCount")
-const saleTable = document.getElementById("saleTable")
-const dailyCanvas = document.getElementById("dailyChart")
-const productCanvas = document.getElementById("productChart")
+const topSellerEl = document.getElementById("topSeller")
+const compareCanvas = document.getElementById("compareChart")
 
-/* ================= STATE ================= */
-let saleRows = []
-let productMap = {}
-let dailyChart = null
-let productChart = null
+let compareChart
 
 /* ================= UTILS ================= */
 function thaiDate(iso) {
   const d = new Date(iso)
   d.setHours(d.getHours() + 7)
-  return d.toISOString().slice(0, 10)
+  return d.toISOString().slice(0,7)
 }
 
 /* ================= LOAD ================= */
-async function loadProducts() {
-  const { data } = await sb.from("products").select("id,name")
-  ;(data || []).forEach(p => productMap[p.id] = p.name)
-}
-
-async function loadSales() {
+async function loadDashboard() {
   const { data } = await sb
     .from("order_items")
-    .select(`
-      product_id,
-      qty,
-      price,
-      orders!inner(paid_at)
-    `)
+    .select(`qty, price, product_id, orders!inner(paid_at)`)
     .eq("status", "done")
 
-  saleRows = data || []
-  renderDashboard()
-}
+  const rows = data || []
 
-/* ================= RENDER ================= */
-function renderDashboard() {
-  const today = thaiDate(new Date().toISOString())
-  const month = today.slice(0, 7)
+  const now = new Date()
+  const thisMonth = thaiDate(now.toISOString())
+  now.setMonth(now.getMonth() - 1)
+  const lastMonth = thaiDate(now.toISOString())
 
-  let todaySum = 0
-  let monthSum = 0
-  const dailyMap = {}
-  const productSum = {}
+  let sumThis = 0
+  let sumLast = 0
+  let count = rows.length
+  const productQty = {}
 
-  saleRows.forEach(r => {
-    const d = thaiDate(r.orders.paid_at)
+  rows.forEach(r => {
+    const m = thaiDate(r.orders.paid_at)
     const total = r.qty * r.price
 
-    if (d === today) todaySum += total
-    if (d.startsWith(month)) monthSum += total
+    if (m === thisMonth) sumThis += total
+    if (m === lastMonth) sumLast += total
 
-    dailyMap[d] = (dailyMap[d] || 0) + total
-    productSum[r.product_id] =
-      (productSum[r.product_id] || 0) + total
+    if (m === thisMonth) {
+      productQty[r.product_id] =
+        (productQty[r.product_id] || 0) + r.qty
+    }
   })
 
-  todayTotalEl.textContent = todaySum.toLocaleString() + " ฿"
-  monthTotalEl.textContent = monthSum.toLocaleString() + " ฿"
-  orderCountEl.textContent = saleRows.length
+  thisMonthEl.textContent = sumThis.toLocaleString() + " ฿"
+  lastMonthEl.textContent = sumLast.toLocaleString() + " ฿"
+  orderCountEl.textContent = count
 
-  renderDailyChart(dailyMap)
-  renderProductChart(productSum)
-  renderTable()
+  const diff = sumLast === 0 ? 0 : ((sumThis - sumLast) / sumLast * 100)
+  compareTextEl.innerHTML =
+    diff >= 0
+      ? `<span class="text-green-400">▲ เพิ่มขึ้น ${diff.toFixed(1)}%</span>`
+      : `<span class="text-red-400">▼ ลดลง ${Math.abs(diff).toFixed(1)}%</span>`
+
+  renderCompareChart(sumThis, sumLast)
+  renderTopSeller(productQty)
 }
 
 /* ================= CHART ================= */
-function renderDailyChart(map) {
-  if (dailyChart) dailyChart.destroy()
-  dailyChart = new Chart(dailyCanvas, {
-    type: "line",
-    data: {
-      labels: Object.keys(map),
-      datasets: [{
-        label: "ยอดขาย",
-        data: Object.values(map),
-        borderColor: "#22c55e",
-        tension: 0.3
-      }]
-    }
-  })
-}
-
-function renderProductChart(map) {
-  if (productChart) productChart.destroy()
-
-  const labels = Object.keys(map).map(id => productMap[id] || "ไม่ทราบชื่อ")
-  const values = Object.values(map)
-
-  productChart = new Chart(productCanvas, {
+function renderCompareChart(thisM, lastM) {
+  if (compareChart) compareChart.destroy()
+  compareChart = new Chart(compareCanvas, {
     type: "bar",
     data: {
-      labels,
+      labels: ["เดือนก่อน", "เดือนนี้"],
       datasets: [{
         label: "ยอดขาย",
-        data: values,
-        backgroundColor: "#3b82f6"
+        data: [lastM, thisM],
+        backgroundColor: ["#64748b", "#22c55e"]
       }]
     }
   })
 }
 
-/* ================= TABLE ================= */
-function renderTable() {
-  saleTable.innerHTML = ""
-  saleRows.forEach(r => {
-    const tr = document.createElement("tr")
-    tr.innerHTML = `
-      <td class="p-2">${thaiDate(r.orders.paid_at)}</td>
-      <td class="p-2">${productMap[r.product_id]}</td>
-      <td class="p-2 text-right">${r.qty}</td>
-      <td class="p-2 text-right">${r.qty * r.price}</td>
-    `
-    saleTable.appendChild(tr)
-  })
-}
-
-/* ================= EXPORT ================= */
-function exportExcel() {
-  const rows = saleRows.map(r => ({
-    วันที่: thaiDate(r.orders.paid_at),
-    เมนู: productMap[r.product_id],
-    จำนวน: r.qty,
-    ยอด: r.qty * r.price
-  }))
-  const ws = XLSX.utils.json_to_sheet(rows)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, "Sales")
-  XLSX.writeFile(wb, "sales.xlsx")
+/* ================= TOP SELLER ================= */
+function renderTopSeller(map) {
+  topSellerEl.innerHTML = ""
+  Object.entries(map)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,5)
+    .forEach(([id,qty],i)=>{
+      const div = document.createElement("div")
+      div.textContent = `${i+1}. สินค้า #${id} — ${qty} ที่`
+      topSellerEl.appendChild(div)
+    })
 }
 
 /* ================= INIT ================= */
-;(async () => {
-  await loadProducts()
-  await loadSales()
-})()
+loadDashboard()
 </script>
 
 </body>
