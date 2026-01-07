@@ -19,12 +19,17 @@
   src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg">
 </audio>
 
-<div class="max-w-6xl mx-auto grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-4">
+<div class="
+  max-w-6xl mx-auto
+  grid grid-cols-1 gap-3
+  md:grid-cols-12 md:gap-4
+">
 
   <!-- โต๊ะ -->
   <div class="md:col-span-3 bg-slate-800 rounded-xl p-3">
     <h2 class="font-bold mb-3 text-lg">🪑 โต๊ะที่พร้อมคิดเงิน</h2>
-    <div id="tableList"
+    <div
+      id="tableList"
       class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-1 gap-2">
     </div>
   </div>
@@ -83,7 +88,7 @@ const sb = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
 
-const PROMPTPAY_ID = "0869525072"
+const PROMPTPAY_ID = "0936494961"
 
 /* ================= SOUND AUTO UNLOCK ================= */
 const paySound = document.getElementById("paySound")
@@ -159,7 +164,14 @@ async function loadBillByTable(tableId) {
   for (const o of orders || []) {
     const { data: items } = await sb
       .from("order_items")
-      .select("product_id,qty,price")
+      .select(`
+        product_id,
+        qty,
+        price,
+        option_special,
+        option_mix,
+        mix_sauce_id
+      `)
       .eq("order_id", o.id)
       .eq("status", "done")
 
@@ -167,15 +179,35 @@ async function loadBillByTable(tableId) {
       const p = productMap[it.product_id]
       if (!p) return
 
+      // 🔎 สร้างข้อความ option
+      let optionText = []
+      if (it.option_special) optionText.push("พิเศษ")
+      if (it.option_mix && it.mix_sauce_id) {
+        const mixName = productMap[it.mix_sauce_id] || "ไม่ทราบน้ำ"
+        optionText.push(`ผสม${mixName}`)
+      }
+
+      const optionLabel = optionText.length
+        ? ` <span class="text-sm text-yellow-400">(${optionText.join(" / ")})</span>`
+        : ""
+
       const rowTotal = it.price * it.qty
       total += rowTotal
 
       const div = document.createElement("div")
       div.className = "flex justify-between border-b border-slate-700 py-1"
+
       div.innerHTML = `
-        <div>${p.name} x ${it.qty}</div>
-        <div>${rowTotal} บาท</div>
+        <div>
+          ${p} x ${it.qty}
+          ${optionLabel}
+          <div class="text-xs text-gray-400">
+            ${it.price} บาท / ชาม
+          </div>
+        </div>
+        <div class="font-bold">${rowTotal} บาท</div>
       `
+
       billItems.appendChild(div)
     })
   }
