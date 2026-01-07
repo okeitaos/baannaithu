@@ -4,7 +4,6 @@
 <meta charset="UTF-8" />
 <title>📊 Dashboard ยอดขาย</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-
 <link rel="icon" href="data:,">
 
 <script src="https://cdn.tailwindcss.com"></script>
@@ -80,14 +79,19 @@ const sb = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
 
-/* ================= STATE ================= */
-let saleRows = []
-let productMap = {}
-let dailyChart, productChart
-
+/* ================= ELEMENT ================= */
 const todayTotalEl = document.getElementById("todayTotal")
 const monthTotalEl = document.getElementById("monthTotal")
 const orderCountEl = document.getElementById("orderCount")
+const saleTable = document.getElementById("saleTable")
+const dailyCanvas = document.getElementById("dailyChart")
+const productCanvas = document.getElementById("productChart")
+
+/* ================= STATE ================= */
+let saleRows = []
+let productMap = {}
+let dailyChart = null
+let productChart = null
 
 /* ================= UTILS ================= */
 function thaiDate(iso) {
@@ -124,9 +128,8 @@ function renderDashboard() {
 
   let todaySum = 0
   let monthSum = 0
-
   const dailyMap = {}
-  const productMapSum = {}
+  const productSum = {}
 
   saleRows.forEach(r => {
     const d = thaiDate(r.orders.paid_at)
@@ -136,8 +139,8 @@ function renderDashboard() {
     if (d.startsWith(month)) monthSum += total
 
     dailyMap[d] = (dailyMap[d] || 0) + total
-    productMapSum[r.product_id] =
-      (productMapSum[r.product_id] || 0) + total
+    productSum[r.product_id] =
+      (productSum[r.product_id] || 0) + total
   })
 
   todayTotalEl.textContent = todaySum.toLocaleString() + " ฿"
@@ -145,21 +148,22 @@ function renderDashboard() {
   orderCountEl.textContent = saleRows.length
 
   renderDailyChart(dailyMap)
-  renderProductChart(productMapSum)
+  renderProductChart(productSum)
   renderTable()
 }
 
 /* ================= CHART ================= */
 function renderDailyChart(map) {
   if (dailyChart) dailyChart.destroy()
-  dailyChart = new Chart(dailyChartEl, {
+  dailyChart = new Chart(dailyCanvas, {
     type: "line",
     data: {
       labels: Object.keys(map),
       datasets: [{
         label: "ยอดขาย",
         data: Object.values(map),
-        borderColor: "#22c55e"
+        borderColor: "#22c55e",
+        tension: 0.3
       }]
     }
   })
@@ -167,13 +171,17 @@ function renderDailyChart(map) {
 
 function renderProductChart(map) {
   if (productChart) productChart.destroy()
-  productChart = new Chart(productChartEl, {
+
+  const labels = Object.keys(map).map(id => productMap[id] || "ไม่ทราบชื่อ")
+  const values = Object.values(map)
+
+  productChart = new Chart(productCanvas, {
     type: "bar",
     data: {
-      labels: Object.keys(map).map(id => productMap[id]),
+      labels,
       datasets: [{
         label: "ยอดขาย",
-        data: Object.values(map),
+        data: values,
         backgroundColor: "#3b82f6"
       }]
     }
