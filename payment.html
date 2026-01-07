@@ -59,6 +59,7 @@ const sb = supabase.createClient(
   "https://nvsptbbvxjulrpdebrhn.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
 )
+
 const PROMPTPAY_ID = "0936494961"
 
 /* ================= STATE ================= */
@@ -70,19 +71,26 @@ let paymentMethod = null
 
 /* ================= MASTER ================= */
 async function loadProducts() {
-  const { data } = await sb.from("products").select("id,name,price")
+  const { data } = await sb
+    .from("products")
+    .select("id,name,price")
+
   ;(data || []).forEach(p => productMap[p.id] = p)
 }
 
 async function loadTables() {
-  const { data } = await sb.from("tables").select("id,table_no")
+  const { data } = await sb
+    .from("tables")
+    .select("id,table_no")
+
   ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
 }
 
-/* ================= LOAD TABLES (ONLY OPEN ORDERS) ================= */
+/* ================= LOAD TABLES ================= */
 async function loadOpenTables() {
   tableList.innerHTML = ""
 
+  // 🔒 เอาเฉพาะบิลที่ยังเปิดอยู่
   const { data: orders } = await sb
     .from("orders")
     .select("id,table_id")
@@ -105,18 +113,20 @@ async function loadBill(orderId, tableId) {
   payBtn.disabled = true
   qrBox.classList.add("hidden")
   billItems.innerHTML = ""
+
   let total = 0
 
-  // ดึงเฉพาะ item ที่ done
+  // ⭐ คิดเงินเฉพาะรายการที่ DONE เท่านั้น
   const { data: items } = await sb
     .from("order_items")
-    .select("*")
+    .select("product_id,qty")
     .eq("order_id", orderId)
     .eq("status", "done")
 
   ;(items || []).forEach(it => {
     const p = productMap[it.product_id]
     if (!p) return
+
     const price = p.price * it.qty
     total += price
 
@@ -159,7 +169,7 @@ payBtn.onclick = async () => {
   })
   if (!confirm.isConfirmed) return
 
-  // ✅ เรียก function ปิดบิล (ปลอดภัยสุด)
+  // ✅ ปิดบิลผ่าน function (ปลอดภัย ไม่ 400)
   const { error } = await sb.rpc("close_order", {
     p_order_id: currentOrderId,
     p_method: paymentMethod
@@ -177,7 +187,7 @@ payBtn.onclick = async () => {
 
   Swal.fire("สำเร็จ", "ปิดบิลเรียบร้อย", "success")
 
-  // reset state
+  // reset
   currentOrderId = null
   currentTableId = null
   billItems.innerHTML = ""
