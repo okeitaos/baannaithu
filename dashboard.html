@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<title>👨‍🍳 Kitchen (By Bill)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="icon" href="data:,">
+</head>
+
+<body class="bg-slate-900 text-white min-h-screen p-3">
+
+<audio
+  id="dingSound"
+  src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg">
+</audio>
+
+<div class="max-w-7xl mx-auto">
+  <h1 class="text-2xl font-bold mb-4">👨‍🍳 หน้าครัว (แสดงเป็นบิล)</h1>
+  <div id="billList" class="grid md:grid-cols-2 gap-4"></div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const sb = supabase.createClient(
+  "https://nvsptbbvxjulrpdebrhn.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52c3B0YmJ2eGp1bHJwZGVicmhuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MTc1NTAsImV4cCI6MjA4MzE5MzU1MH0.sQ8XqdAKCsaxWupP3QZjFOraEHyW8agSo3c3BR3I8ss"
+)
+
+/* ================= STATE ================= */
+const billList = document.getElementById("billList")
+const ding = document.getElementById("dingSound")
+
+let productMap = {}
+let tableMap = {}
+let orderTableMap = {}
+let knownOrderIds = new Set()
+
+/* ================= MASTER ================= */
+async function loadProducts() {
+  const { data } = await sb.from("products").select("id,name")
+  ;(data || []).forEach(p => productMap[p.id] = p.name)
+}
+
+async function loadTables() {
+  const { data } = await sb.from("tables").select("id,table_no")
+  ;(data || []).forEach(t => tableMap[t.id] = t.table_no)
+}
+
+async function loadOrdersMap() {
+  const { data } = await sb.from("orders").select("id,table_id")
+  orderTableMap = {}
+  ;(data || []).forEach(o => {
+    orderTableMap[o.id] = tableMap[o.table_id] || "-"
+  })
+}
+
+/* ================= LOAD BILLS ================= */
+async function loadBills(playSound = false) {
+  const { data, error } = await sb
+    .from("order_items")
+    .select(`
+      id,
+      order_id,
+      product_id,
+      mix_sauce_id,
+      qty,
+      option_special,
+      option_mix,
+      status
+    `)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    console.error(error)
+    return
+  }
+
+  billList.innerHTML = ""
+
+  const bills = {}
+  ;(data || []).forEach(it => {
+    if (!bills[it.order_id]) bills[it.order_id] = []
+    bills[it.order_id].push(it)
+  })
+
+  let hasNew = false
+
+  Object.entries(bills).forEach(([orderId, items]) => {
+    if (!knownOrderIds.has(orderId)) {
+      knownOrderIds.add(orderId)
+      hasNew = true
+    }
+
+    const tableNo = orderTableMap[orderId] || "-"
+    const card = document.createElement("div")
+    card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700"
+
+    const itemsHTML = items.map(it => {
+      const name = productMap[it.product_id] || "ไม่ทราบชื่อ"
+      const mixName =
+        it.option_mix && it.mix_sauce_id
+          ? productMap[it.mix_sauce_id]
+          : ""
+
+      return `
+        <div class="flex justify-between items-center border-b border-slate-700 py-1">
+          <div>
+            ${name}
+            ${it.option_special ? "(พิเศษ)" : ""}
+            ${mixName ? `(ผสม ${mixName})` : ""}
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="minus bg-slate-600 px-2 rounded" data-id="${it.id}" data-qty="${it.qty}">-</button>
+            <span class="font-bold">${it.qty}</span>
+            <button class="cancel text-white bg-red-600 px-2 rounded" data-id="${it.id}">✕</button>
+          </div>
+        </div>
+      `
+    }).join("")
+
+    card.innerHTML = `
+      <div class="flex justify-between items-center mb-3">
+        <div class="text-lg font-bold">🍽️ โต๊ะ ${tableNo}</div>
+        <button class="doneBill bg-green-600 px-4 py-1 rounded">
+          ✅ เสร็จทั้งบิล
+        </button>
+      </div>
+      ${itemsHTML}
+    `
+
+    /* ➖ ลดจำนวน */
+    card.querySelectorAll(".minus").forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.dataset.id
+        const qty = Number(btn.dataset.qty) - 1
+
+        if (qty <= 0) {
+          await sb.from("order_items")
+            .update({ status: "cancelled" })
+            .eq("id", id)
+        } else {
+          await sb.from("order_items")
+            .update({ qty })
+            .eq("id", id)
+        }
+
+        loadBills()
+      }
+    })
+
+    /* ❌ ลบ */
+    card.querySelectorAll(".cancel").forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.dataset.id
+
+        const c = await Swal.fire({
+          title: "ยกเลิกรายการนี้?",
+          icon: "warning",
+          showCancelButton: true,
+          confirmButtonText: "ยกเลิก",
+          cancelButtonText: "ไม่"
+        })
+        if (!c.isConfirmed) return
+
+        await sb.from("order_items")
+          .update({ status: "cancelled" })
+          .eq("id", id)
+
+        loadBills()
+      }
+    })
+
+    /* ✅ เสร็จทั้งบิล */
+    card.querySelector(".doneBill").onclick = async () => {
+      const c = await Swal.fire({
+        title: `ยืนยันเสร็จทั้งบิล โต๊ะ ${tableNo}`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "เสร็จแล้ว",
+        cancelButtonText: "ยัง"
+      })
+      if (!c.isConfirmed) return
+
+      await sb.from("order_items")
+        .update({ status: "done" })
+        .eq("order_id", orderId)
+        .eq("status", "pending")
+
+      loadBills()
+    }
+
+    billList.appendChild(card)
+  })
+
+  if (playSound && hasNew) {
+    ding.currentTime = 0
+    ding.play().catch(()=>{})
+  }
+}
+
+/* ================= REALTIME ================= */
+const channel = sb.channel("kitchen-bill")
+
+channel.on(
+  "postgres_changes",
+  { event: "INSERT", schema: "public", table: "order_items" },
+  async payload => {
+    if (payload.new.status === "pending") {
+      await loadOrdersMap()
+      loadBills(true)
+    }
+  }
+)
+
+channel.on(
+  "postgres_changes",
+  { event: "UPDATE", schema: "public", table: "order_items" },
+  () => loadBills()
+)
+
+channel.subscribe()
+
+/* ================= INIT ================= */
+;(async () => {
+  await loadProducts()
+  await loadTables()
+  await loadOrdersMap()
+  loadBills()
+})()
+</script>
+
+</body>
+</html>
